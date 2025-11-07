@@ -2,6 +2,7 @@ import sensor, image, time
 import KPU as kpu
 import gc, sys
 from machine import UART
+import ustruct
 
 last_character_label = None
 last_color_label = None
@@ -15,6 +16,9 @@ task = None
 uart = UART(UART.UART1, 115200,8,0,0, timeout=1000, read_buf_len=4096)
 labels = ["H", "None", "S", "U"]
 
+def send(data):
+    uart.write(ustruct.pack("B", data))
+    uart.flush()
 
 def detect_character_victim(img):
     global last_label
@@ -83,7 +87,6 @@ def main(model_addr=0x300000, sensor_window=(224, 224)):
     sensor.sleep(2000)
     sensor.run(1)
     img = image.Image(size=(320, 240))
-    img.draw_string(90, 110, "loading model...", color=(255, 255, 255), scale=2)
 
     task = kpu.load(model_addr)
 
@@ -95,10 +98,10 @@ def main(model_addr=0x300000, sensor_window=(224, 224)):
             ch = detect_character_victim(img)
             col = detect_colored_victim(img)
             if ch is not None:
-                uart.write("C%d\n" %ch)
+                send(ch)
             if col is not None:
-                uart.write("C%d\n" %col)
-            uart.flush()
+                send(col)
+            
     except Exception as e:
         print(e)
         raise e
