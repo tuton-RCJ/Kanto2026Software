@@ -16,13 +16,16 @@ task = None
 uart = UART(UART.UART1, 115200,8,0,0, timeout=1000, read_buf_len=4096)
 labels = ["H", "None", "S", "U"]
 
+gc.enable()
+gc.threshold(gc.mem_alloc() + gc.mem_free())
+
 def send(data):
     uart.write(ustruct.pack("B", data))
     uart.flush()
 
 def detect_character_victim(img):
-    global last_label
-    global count
+    global last_character_label
+    global character_count
     global task
     labels = ["H", "None", "S", "U"]
 
@@ -49,6 +52,8 @@ def detect_character_victim(img):
         last_character_label = None
         character_count = 0
 def detect_colored_victim(img):
+    global last_color_label
+    global color_count
     if img.find_blobs(thre_red, pixels_threshold=200, area_threshold=200, merge=True):
         if last_color_label == "R":
             color_count += 1
@@ -101,7 +106,7 @@ def main(model_addr=0x300000, sensor_window=(224, 224)):
                 send(ch)
             if col is not None:
                 send(col)
-            
+            gc.collect()
     except Exception as e:
         print(e)
         raise e
