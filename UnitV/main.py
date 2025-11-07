@@ -80,6 +80,9 @@ def detect_colored_victim(img):
             color_count = 1
         if color_count == 3:
             color_count = 2
+    else:
+        last_color_label = None
+        color_count = 0
         return 6
 
 def main(model_addr=0x300000, sensor_window=(224, 224)):
