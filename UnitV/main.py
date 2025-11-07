@@ -14,7 +14,7 @@ thre_red = [(20, 75, 40, 60, 30, 60)]
 thre_yellow = [(25, 100, -10, 10, 30, 70)]
 task = None
 uart = UART(UART.UART1, 115200,8,0,0, timeout=1000, read_buf_len=4096)
-labels = ["H", "None", "S", "U"]
+labels = ("H", "None", "S", "U")
 
 gc.enable()
 gc.threshold(gc.mem_alloc() + gc.mem_free())
@@ -27,7 +27,6 @@ def detect_character_victim(img):
     global last_character_label
     global character_count
     global task
-    labels = ["H", "None", "S", "U"]
 
     fmap = kpu.forward(task, img)
     plist=fmap[:]
@@ -51,6 +50,7 @@ def detect_character_victim(img):
     else:
         last_character_label = None
         character_count = 0
+        
 def detect_colored_victim(img):
     global last_color_label
     global color_count
