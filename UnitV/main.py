@@ -2,6 +2,7 @@ import sensor, image, time
 import KPU as kpu
 import gc, sys
 from machine import UART
+import ustruct
 
 last_character_label = None
 last_color_label = None
@@ -13,14 +14,19 @@ thre_red = [(20, 75, 40, 60, 30, 60)]
 thre_yellow = [(25, 100, -10, 10, 30, 70)]
 task = None
 uart = UART(UART.UART1, 115200,8,0,0, timeout=1000, read_buf_len=4096)
-labels = ["H", "None", "S", "U"]
+labels = ("H", "None", "S", "U")
 
+gc.enable()
+gc.threshold(gc.mem_alloc() + gc.mem_free())
+
+def send(data):
+    uart.write(ustruct.pack("B", data))
+    uart.flush()
 
 def detect_character_victim(img):
-    global last_label
-    global count
+    global last_character_label
+    global character_count
     global task
-    labels = ["H", "None", "S", "U"]
 
     fmap = kpu.forward(task, img)
     plist=fmap[:]
@@ -44,7 +50,10 @@ def detect_character_victim(img):
     else:
         last_character_label = None
         character_count = 0
+        
 def detect_colored_victim(img):
+    global last_color_label
+    global color_count
     if img.find_blobs(thre_red, pixels_threshold=200, area_threshold=200, merge=True):
         if last_color_label == "R":
             color_count += 1
@@ -71,6 +80,9 @@ def detect_colored_victim(img):
             color_count = 1
         if color_count == 3:
             color_count = 2
+    else:
+        last_color_label = None
+        color_count = 0
         return 6
 
 def main(model_addr=0x300000, sensor_window=(224, 224)):
@@ -83,7 +95,6 @@ def main(model_addr=0x300000, sensor_window=(224, 224)):
     sensor.sleep(2000)
     sensor.run(1)
     img = image.Image(size=(320, 240))
-    img.draw_string(90, 110, "loading model...", color=(255, 255, 255), scale=2)
 
     task = kpu.load(model_addr)
 
@@ -95,10 +106,10 @@ def main(model_addr=0x300000, sensor_window=(224, 224)):
             ch = detect_character_victim(img)
             col = detect_colored_victim(img)
             if ch is not None:
-                uart.write("C%d\n" %ch)
+                send(ch)
             if col is not None:
-                uart.write("C%d\n" %col)
-            uart.flush()
+                send(col)
+            gc.collect()
     except Exception as e:
         print(e)
         raise e
