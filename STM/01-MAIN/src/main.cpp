@@ -41,7 +41,7 @@ Display ssd1306(128, 64, -1); // width, height, resetPin
 
 byte sensorData[8]; // UnitV_L,UnitV_R, Loadcell_L, Loadcell_R, BNO055_heading, BNO055_pitch,BNO055_roll,SW
 void checkRPi();
-bool verifyCheckDigit(byte[] data, int length, byte checkDigit);
+bool verifyCheckDigit(byte data[], int length, byte checkDigit);
 
 void setup()
 {
@@ -214,8 +214,8 @@ void driveSTS3032(int leftSpeed, int rightSpeed)
 {
   for (int i = 0; i < 5; i++)
   {
-    sts3032.LeftDrive(leftSpeed);
-    sts3032.RightDrive(rightSpeed);
+    sts3032.LeftDrive(leftSpeed,0);
+    sts3032.RightDrive(rightSpeed,0);
   }
 }
 
@@ -248,7 +248,7 @@ void ReadSW()
   sensorData[7] = (digitalRead(SWpin[0]) << 7) + (digitalRead(SWpin[1]) << 6);
 }
 
-bool verifyCheckDigit(byte[] data, int length, byte checkDigit)
+bool verifyCheckDigit(byte data[], int length, byte checkDigit)
 {
   // XORが一致するか確認
   byte cd = 0x00;
