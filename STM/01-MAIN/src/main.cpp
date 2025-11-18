@@ -1,99 +1,260 @@
 #include <Arduino.h>
 #include <Adafruit_NeoPixel.h>
+#include "device/device.h"
+#define I2C_SDA PB7
+#define I2C_SCL PB6
 
-const int numPixels = 1;
-const int pixelPin = PA14;
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(numPixels, pixelPin, NEO_GRB + NEO_KHZ800);
-HardwareSerial uart1(PA10, PA9);
-const int BuzzerPin = PB8;
+HardwareSerial uart1(PA10, PA9);              // USB
+HardwareSerial uart2(PA3, PA2);               // RPi
+HardwareSerial uart3(PC_11_ALT1, PC_10_ALT1); // STS3032
+HardwareSerial uart4(PA1, PA0);               // UnitV Left
+HardwareSerial uart5(PD_2, PC_12);            // UnitV Right
 
-// 音階定義（周波数[Hz]）
-#define NOTE_C4 262
-#define NOTE_D4 294
-#define NOTE_E4 330
-#define NOTE_F4 349
-#define NOTE_G4 392
-#define NOTE_A4 440
-#define NOTE_B4 494
-#define NOTE_C5 523
-#define NOTE_D5 587
-#define NOTE_E5 659
-#define NOTE_F5 698
-#define NOTE_G5 784
-#define NOTE_A5 880
-#define NOTE_B5 988
+UnitV unitv_L(&uart4);
+UnitV unitv_R(&uart5);
+void ReadUnitV();
 
-void PlayYuuyakeKoyake();
-void ColorfulLED();
+LoadCell loadcell(PC0, PC2);
+void ReadLoadcell();
+
+BNO055 bno(55, &Wire);
+void ReadBNO();
+
+const int SWpin[2] = {PA13, PA12};
+void ReadSW();
+
+STS3032 sts3032(&uart3);
+void driveSTS3032(int leftSpeed, int rightSpeed);
+
+Buzzer buzzer(PB8);
+LED led(PA14, 1);
+
+const int Servo_L = PC9;
+const int Servo_R = PB9;
+Servo servo_L;
+Servo servo_R;
+void DropRescueKit(bool isLeft);
+
+void init_i2c();
+
+Display ssd1306(128, 64, -1); // width, height, resetPin
+
+byte sensorData[8]; // UnitV_L,UnitV_R, Loadcell_L, Loadcell_R, BNO055_heading, BNO055_pitch,BNO055_roll,SW
+void checkRPi();
+bool verifyCheckDigit(byte[] data, int length, byte checkDigit);
 
 void setup()
 {
   uart1.begin(115200);
-  pinMode(BuzzerPin, OUTPUT);
-  strip.begin();
-  strip.show(); // Initialize all pixels to 'off'
-}
 
+  servo_L.attach(Servo_L);
+  servo_R.attach(Servo_R);
+  servo_L.write(0);
+  servo_R.write(180);
+
+  init_i2c();
+  delay(50);
+
+  uart1.println(bno.begin());
+
+  delay(50);
+  ssd1306.begin();
+  // // ssd1306.runDemo();
+
+  led.setBrightness(20);
+  led.turnOff();
+  sts3032.isDisabled = false;
+  sts3032.stop();
+
+  uart2.begin(115200);
+}
+void checkRPi();
 void loop()
 {
-  ColorfulLED();
-  PlayYuuyakeKoyake();
-  delay(5000); // 次の演奏までの休み
+
+  checkRPi();
+  ReadUnitV();
+  checkRPi();
+  ReadLoadcell();
+  checkRPi();
+  ReadBNO();
+  checkRPi();
+  ReadSW();
 }
 
-void ColorfulLED()
+void checkRPi()
 {
-  for (int i = 0; i < numPixels; i++)
+  if (uart2.available())
   {
-    strip.setPixelColor(i, strip.Color(255, 0, 0)); // 赤
-    strip.show();
-    delay(200);
-    strip.setPixelColor(i, strip.Color(0, 255, 0)); // 緑
-    strip.show();
-    delay(200);
-    strip.setPixelColor(i, strip.Color(0, 0, 255)); // 青
-    strip.show();
-    delay(200);
-    strip.setPixelColor(i, strip.Color(255, 255, 0)); // 黄
-    strip.show();
-    delay(200);
-    strip.setPixelColor(i, strip.Color(0, 255, 255)); // シアン
-    strip.show();
-    delay(200);
-    strip.setPixelColor(i, strip.Color(255, 0, 255)); // マゼンタ
-    strip.show();
-    delay(200);
-    strip.setPixelColor(i, strip.Color(255, 255, 255)); // 白
-    strip.show();
-    delay(200);
-    strip.setPixelColor(i, strip.Color(0, 0, 0)); // 消灯
-    strip.show();
-    delay(200);
+
+    byte type = uart2.read();
+    byte seq = uart2.read();
+    if (type = 0x00)
+    {
+      // センサーデータ送信
+      byte CD = uart2.read();
+      byte data[2] = {type, seq};
+      if (verifyCheckDigit(data, 2, CD))
+      {
+        byte checkDigit = 0x00;
+        uart2.write(0x00); // type
+        uart2.write(seq);  // seq
+        checkDigit ^= 0x00;
+        checkDigit ^= seq;
+        for (int i = 0; i < 8; i++)
+        {
+          uart2.write(sensorData[i]);
+          checkDigit ^= sensorData[i];
+        }
+        uart2.write(checkDigit);
+      }
+      else
+      {
+        uart1.println("CheckDigit Error!");
+      }
+    }
+    else if (type == 1)
+    {
+      // STS3032動作指令
+      byte leftSpeed = uart2.read();
+      byte rightSpeed = uart2.read();
+      byte CD = uart2.read();
+      byte data[4] = {type, seq, leftSpeed, rightSpeed};
+      if (verifyCheckDigit(data, 4, CD))
+      {
+        driveSTS3032((int)leftSpeed - 100, (int)rightSpeed - 100);
+        // 返答
+        uart2.write(0x01);       // type
+        uart2.write(seq);        // seq
+        uart2.write(0x01 ^ seq); // CD
+      }
+      else
+      {
+        uart1.println("CheckDigit Error!");
+      }
+    }
+    else if (type == 2)
+    {
+      // 救助キット投下指令
+      byte side = uart2.read();
+      byte num = uart2.read();
+      byte CD = uart2.read();
+      byte data[4] = {type, seq, side, num};
+      if (verifyCheckDigit(data, 4, CD))
+      {
+        for (int i = 0; i < num; i++)
+        {
+          DropRescueKit(side == 0);
+        }
+        // 返答
+        uart2.write(0x02);       // type
+        uart2.write(seq);        // seq
+        uart2.write(0x02 ^ seq); // CD
+      }
+      else
+      {
+        uart1.println("CheckDigit Error!");
+      }
+    }
+    else if (type == 3)
+    {
+      // LED制御命令
+      byte r = uart2.read();
+      byte g = uart2.read();
+      byte b = uart2.read();
+      byte CD = uart2.read();
+      byte data[5] = {type, seq, r, g, b};
+      if (verifyCheckDigit(data, 5, CD))
+      {
+        led.setColor(r, g, b);
+        // 返答
+        uart2.write(0x03);       // type
+        uart2.write(seq);        // seq
+        uart2.write(0x03 ^ seq); // CD
+      }
+      else
+      {
+
+        uart1.println("CheckDigit Error!");
+      }
+    }
+    while (uart2.available())
+    {
+      uart2.read();
+    }
   }
 }
 
-// 「夕焼け小焼け」メロディデータ
-void PlayYuuyakeKoyake()
+void init_i2c()
 {
-  // ♪夕焼け小焼けで日が暮れて…
-  int melody[] = {
-      NOTE_G4, NOTE_A4, NOTE_B4, NOTE_C5, NOTE_B4, NOTE_A4, NOTE_G4,
-      NOTE_A4, NOTE_B4, NOTE_C5, NOTE_D5, NOTE_C5, NOTE_B4, NOTE_A4,
-      NOTE_B4, NOTE_C5, NOTE_D5, NOTE_E5, NOTE_D5, NOTE_C5, NOTE_B4,
-      NOTE_C5, NOTE_D5, NOTE_E5, NOTE_F5, NOTE_E5, NOTE_D5, NOTE_C5};
+  Wire.setSDA(I2C_SDA);
+  Wire.setSCL(I2C_SCL);
+  Wire.begin();
+}
 
-  int noteDurations[] = {
-      4, 4, 4, 2, 4, 4, 2,
-      4, 4, 4, 2, 4, 4, 2,
-      4, 4, 4, 2, 4, 4, 2,
-      4, 4, 4, 2, 4, 4, 2};
-
-  int notes = sizeof(melody) / sizeof(melody[0]);
-  for (int i = 0; i < notes; i++)
+void DropRescueKit(bool isLeft)
+{
+  if (isLeft)
   {
-    int duration = 500 / noteDurations[i];
-    tone(BuzzerPin, melody[i], duration);
-    delay(duration * 1.3);
-    noTone(BuzzerPin);
+    servo_L.write(70);
+    delay(400);
+    servo_L.write(0);
+    delay(400);
   }
+  else
+  {
+    servo_R.write(110);
+    delay(400);
+    servo_R.write(180);
+    delay(400);
+  }
+}
+
+void driveSTS3032(int leftSpeed, int rightSpeed)
+{
+  for (int i = 0; i < 5; i++)
+  {
+    sts3032.LeftDrive(leftSpeed);
+    sts3032.RightDrive(rightSpeed);
+  }
+}
+
+void ReadUnitV()
+{
+  unitv_L.read();
+  sensorData[0] = (byte)(unitv_L.status & 0xFF);
+  unitv_R.read();
+  sensorData[1] = (byte)(unitv_R.status & 0xFF);
+}
+
+void ReadLoadcell()
+{
+  loadcell.read();
+  sensorData[2] = (byte)(loadcell.values[0] & 0xFF);
+  sensorData[3] = (byte)(loadcell.values[1] & 0xFF);
+}
+
+void ReadBNO()
+{
+  bno.read();
+  sensorData[4] = (byte)(((int)bno.heading / 2) & 0xFF);
+  sensorData[5] = (byte)(((int)bno.pitch / 2) & 0xFF);
+  sensorData[6] = (byte)(((int)bno.roll / 2) & 0xFF);
+}
+
+void ReadSW()
+{
+  // 各スイッチの情報を1ビットずつ
+  sensorData[7] = (digitalRead(SWpin[0]) << 7) + (digitalRead(SWpin[1]) << 6);
+}
+
+bool verifyCheckDigit(byte[] data, int length, byte checkDigit)
+{
+  // XORが一致するか確認
+  byte cd = 0x00;
+  for (int i = 0; i < length; i++)
+  {
+    cd ^= data[i];
+  }
+  return (cd == checkDigit);
 }
