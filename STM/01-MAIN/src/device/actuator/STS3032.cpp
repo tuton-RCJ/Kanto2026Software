@@ -40,7 +40,7 @@ void STS3032::LeftDrive(int SpeedPercent, int acceleration)
         speed = 0;
     for (int i = 0; i < 6; i++)
     {
-        sms_sts.WriteSpe(3, speed, acceleration);
+        sms_sts.WriteSpe(1, speed, acceleration);
         sms_sts.WriteSpe(2, speed, acceleration);
     }
 }
@@ -54,7 +54,7 @@ void STS3032::RightDrive(int SpeedPercent, int acceleration)
         speed = 0;
     for (int i = 0; i < 6; i++)
     {
-        sms_sts.WriteSpe(1, speed, acceleration);
+        sms_sts.WriteSpe(3, speed, acceleration);
         sms_sts.WriteSpe(4, speed, acceleration);
     }
 }

@@ -3,6 +3,7 @@
 #include "device/device.h"
 #define I2C_SDA PB7
 #define I2C_SCL PB6
+#include <queue>
 
 HardwareSerial uart1(PA10, PA9);              // USB
 HardwareSerial uart2(PA3, PA2);               // RPi
@@ -33,7 +34,8 @@ const int Servo_L = PC9;
 const int Servo_R = PB9;
 Servo servo_L;
 Servo servo_R;
-void DropRescueKit(bool isLeft);
+// void DropRescueKit(bool isLeft);
+void MoveServo();
 
 void init_i2c();
 
@@ -43,22 +45,33 @@ byte sensorData[8]; // UnitV_L,UnitV_R, Loadcell_L, Loadcell_R, BNO055_heading, 
 void checkRPi();
 bool verifyCheckDigit(byte data[], int length, byte checkDigit);
 
+// サーボを動かすタイミングのキュー
+
+// サーボを動かすタイミングを管理するための構造体。L・R、Open/Close、時間を持つ
+struct ServoCommand
+{
+  bool isLeft;               // 左右
+  bool isOpen;               // 開閉
+  unsigned long executeTime; // 実行時間
+};
+std::queue<ServoCommand> servoCommandQueue;
+
 void setup()
 {
   uart1.begin(115200);
-
+  uart1.println("System Start");
   servo_L.attach(Servo_L);
   servo_R.attach(Servo_R);
   servo_L.write(0);
-  servo_R.write(180);
+  servo_R.write(140);
 
-  init_i2c();
-  delay(50);
+  // init_i2c();
+  // delay(50);
 
-  uart1.println(bno.begin());
+  // uart1.println(bno.begin());
 
-  delay(50);
-  ssd1306.begin();
+  // delay(50);
+  // ssd1306.begin();
   // // ssd1306.runDemo();
 
   led.setBrightness(20);
@@ -71,26 +84,40 @@ void setup()
 void checkRPi();
 void loop()
 {
+  // if (uart2.available())
+  // {
+  //   uart1.write(uart2.read());
+  // }
+  // return;
 
   checkRPi();
+  MoveServo();
   ReadUnitV();
   checkRPi();
+  MoveServo();
   ReadLoadcell();
   checkRPi();
+  MoveServo();
   ReadBNO();
   checkRPi();
+  MoveServo();
   ReadSW();
+  
 }
 
 void checkRPi()
 {
-  if (uart2.available())
+  if (uart2.available() > 2)
   {
-
+    uart1.println("Received Command from RPi");
     byte type = uart2.read();
     byte seq = uart2.read();
-    if (type = 0x00)
+    if (type == 0x00)
     {
+      while (uart2.available() < 1)
+      {
+        // wait for check digit
+      }
       // センサーデータ送信
       byte CD = uart2.read();
       byte data[2] = {type, seq};
@@ -113,8 +140,12 @@ void checkRPi()
         uart1.println("CheckDigit Error!");
       }
     }
-    else if (type == 1)
+    else if (type == 0x01)
     {
+      while (uart2.available() < 3)
+      {
+        // wait for full command
+      }
       // STS3032動作指令
       byte leftSpeed = uart2.read();
       byte rightSpeed = uart2.read();
@@ -135,6 +166,10 @@ void checkRPi()
     }
     else if (type == 2)
     {
+      while (uart2.available() < 3)
+      {
+        // wait for full command
+      }
       // 救助キット投下指令
       byte side = uart2.read();
       byte num = uart2.read();
@@ -142,9 +177,20 @@ void checkRPi()
       byte data[4] = {type, seq, side, num};
       if (verifyCheckDigit(data, 4, CD))
       {
-        for (int i = 0; i < num; i++)
+        uart1.println("Drop Rescue Kit Command Received");
+        uart1.print("Number: ");
+        uart1.println((int)num);
+        unsigned long currentTime = millis();
+        for (int i = 0; i < (int)num; i++)
         {
-          DropRescueKit(side == 0);
+          ServoCommand cmd;
+          cmd.isLeft = (side == 0);
+          cmd.isOpen = true;
+          cmd.executeTime = currentTime + i * 800;
+          servoCommandQueue.push(cmd);
+          cmd.isOpen = false;
+          cmd.executeTime = currentTime + i * 800 + 400;
+          servoCommandQueue.push(cmd);
         }
         // 返答
         uart2.write(0x02);       // type
@@ -158,6 +204,10 @@ void checkRPi()
     }
     else if (type == 3)
     {
+      while (uart2.available() < 4)
+      {
+        // wait for full command
+      }
       // LED制御命令
       byte r = uart2.read();
       byte g = uart2.read();
@@ -178,6 +228,11 @@ void checkRPi()
         uart1.println("CheckDigit Error!");
       }
     }
+    else
+    {
+      uart1.println("Unknown Command Type!");
+      uart1.println(type);
+    }
     while (uart2.available())
     {
       uart2.read();
@@ -190,6 +245,46 @@ void init_i2c()
   Wire.setSDA(I2C_SDA);
   Wire.setSCL(I2C_SCL);
   Wire.begin();
+}
+
+void MoveServo()
+{
+  while (servoCommandQueue.size())
+  {
+
+    unsigned long currentTime = millis();
+    ServoCommand cmd = servoCommandQueue.front();
+    if (currentTime >= cmd.executeTime)
+    {
+      if (cmd.isLeft)
+      {
+        if (cmd.isOpen)
+        {
+          servo_L.write(70);
+        }
+        else
+        {
+          servo_L.write(0);
+        }
+      }
+      else
+      {
+        if (cmd.isOpen)
+        {
+          servo_R.write(110);
+        }
+        else
+        {
+          servo_R.write(160);
+        }
+      }
+      servoCommandQueue.pop();
+    }
+    else
+    {
+      break;
+    }
+  }
 }
 
 void DropRescueKit(bool isLeft)
@@ -205,7 +300,7 @@ void DropRescueKit(bool isLeft)
   {
     servo_R.write(110);
     delay(400);
-    servo_R.write(180);
+    servo_R.write(160);
     delay(400);
   }
 }
@@ -214,13 +309,14 @@ void driveSTS3032(int leftSpeed, int rightSpeed)
 {
   for (int i = 0; i < 5; i++)
   {
-    sts3032.LeftDrive(leftSpeed,0);
-    sts3032.RightDrive(rightSpeed,0);
+    sts3032.LeftDrive(leftSpeed, 0);
+    sts3032.RightDrive(rightSpeed, 0);
   }
 }
 
 void ReadUnitV()
 {
+
   unitv_L.read();
   sensorData[0] = (byte)(unitv_L.status & 0xFF);
   unitv_R.read();
@@ -230,8 +326,8 @@ void ReadUnitV()
 void ReadLoadcell()
 {
   loadcell.read();
-  sensorData[2] = (byte)(loadcell.values[0] & 0xFF);
-  sensorData[3] = (byte)(loadcell.values[1] & 0xFF);
+  sensorData[2] = (byte)((loadcell.values[0] / 64) & 0xFF);
+  sensorData[3] = (byte)((loadcell.values[1] / 64) & 0xFF);
 }
 
 void ReadBNO()
