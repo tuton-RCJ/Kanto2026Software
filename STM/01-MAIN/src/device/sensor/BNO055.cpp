@@ -26,6 +26,10 @@ bool BNO055::read()
     {
         direction += 360;
     }
+    if (heading == 640 && pitch == 640 && roll == 640)
+    {
+        return false;
+    }
     return true;
 }
 

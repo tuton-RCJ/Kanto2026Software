@@ -4,6 +4,7 @@
 #define I2C_SDA PB7
 #define I2C_SCL PB6
 #include <queue>
+#include <Wire.h>
 
 HardwareSerial uart1(PA10, PA9);              // USB
 HardwareSerial uart2(PA3, PA2);               // RPi
@@ -38,7 +39,8 @@ Servo servo_R;
 void MoveServo();
 
 void init_i2c();
-
+void i2c_scan();
+void i2c_bus_recovery();
 Display ssd1306(128, 64, -1); // width, height, resetPin
 
 byte sensorData[8]; // UnitV_L,UnitV_R, Loadcell_L, Loadcell_R, BNO055_heading, BNO055_pitch,BNO055_roll,SW
@@ -65,10 +67,10 @@ void setup()
   servo_L.write(0);
   servo_R.write(140);
 
-  // init_i2c();
+  init_i2c();
   // delay(50);
 
-  // uart1.println(bno.begin());
+  uart1.println(bno.begin());
 
   // delay(50);
   // ssd1306.begin();
@@ -84,6 +86,25 @@ void setup()
 void checkRPi();
 void loop()
 {
+
+  servo_L.write(120);
+  delay(1000);
+  servo_L.write(110);
+  delay(1000);
+  return;
+
+  // if (!bno.read())
+  // {
+  //   uart1.println("BNO055 read error");
+  //   // reset i2c
+  //   i2c_bus_recovery();
+  //   delay(10);
+  //   return;
+  // }
+  // // bno.read();
+  // bno.print(&uart1);
+  // delay(50);
+  // return;
   // if (uart2.available())
   // {
   //   uart1.write(uart2.read());
@@ -102,11 +123,11 @@ void loop()
   checkRPi();
   MoveServo();
   ReadSW();
-  
 }
 
 void checkRPi()
 {
+
   if (uart2.available() > 2)
   {
     uart1.println("Received Command from RPi");
@@ -245,6 +266,54 @@ void init_i2c()
   Wire.setSDA(I2C_SDA);
   Wire.setSCL(I2C_SCL);
   Wire.begin();
+  Wire.setClock(100000); // 100kHz
+}
+void i2c_bus_recovery()
+{
+  pinMode(I2C_SDA, INPUT_PULLUP);
+  pinMode(I2C_SCL, OUTPUT_OPEN_DRAIN);
+
+  // 9クロック生成
+  for (int i = 0; i < 9; i++)
+  {
+    digitalWrite(I2C_SCL, HIGH);
+    delayMicroseconds(5);
+    digitalWrite(I2C_SCL, LOW);
+    delayMicroseconds(5);
+  }
+
+  // STOPコンディションを生成
+  pinMode(I2C_SDA, OUTPUT_OPEN_DRAIN);
+  digitalWrite(I2C_SDA, LOW);
+  delayMicroseconds(5);
+
+  digitalWrite(I2C_SCL, HIGH);
+  delayMicroseconds(5);
+
+  digitalWrite(I2C_SDA, HIGH);
+  delayMicroseconds(5);
+
+  // I2Cを再初期化
+  Wire.begin();
+}
+
+void i2c_scan()
+{
+  uart1.println("I2C Scan Start");
+  for (byte address = 1; address < 127; address++)
+  {
+    Wire.beginTransmission(address);
+    byte error = Wire.endTransmission();
+    if (error == 0)
+    {
+      uart1.print("I2C device found at address 0x");
+      if (address < 16)
+        uart1.print("0");
+      uart1.print(address, HEX);
+      uart1.println(" !");
+    }
+  }
+  uart1.println("I2C Scan End");
 }
 
 void MoveServo()

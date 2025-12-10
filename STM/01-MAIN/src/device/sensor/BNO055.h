@@ -3,6 +3,7 @@
 
 #include <Adafruit_BNO055.h>
 #include <SPI.h>
+#include <Wire.h>
 class BNO055
 {
 public:
@@ -20,7 +21,7 @@ public:
 
 private:
     Adafruit_BNO055 _bno;
-    float direction_offset ;
+    float direction_offset;
 };
 
 #endif
