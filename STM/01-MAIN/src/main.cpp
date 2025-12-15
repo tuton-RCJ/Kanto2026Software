@@ -11,15 +11,16 @@ HardwareSerial uart2(PA3, PA2);               // RPi
 HardwareSerial uart3(PC_11_ALT1, PC_10_ALT1); // STS3032
 HardwareSerial uart4(PA1, PA0);               // UnitV Left
 HardwareSerial uart5(PD_2, PC_12);            // UnitV Right
-
+HardwareSerial uart6(PC_7, PC_6);             // ToF module
 UnitV unitv_L(&uart4);
 UnitV unitv_R(&uart5);
 void ReadUnitV();
 
-LoadCell loadcell(PC0, PC2);
+LoadCell loadcell(PC0, PC1);
 void ReadLoadcell();
 
-BNO055 bno(55, &Wire);
+// BNO055 bno(55, &Wire);
+BNO085 bno( &Wire, &uart1);
 void ReadBNO();
 
 const int SWpin[2] = {PA13, PA12};
@@ -27,6 +28,8 @@ void ReadSW();
 
 STS3032 sts3032(&uart3);
 void driveSTS3032(int leftSpeed, int rightSpeed);
+
+void ReadToF();
 
 Buzzer buzzer(PB8);
 LED led(PA14, 1);
@@ -41,9 +44,9 @@ void MoveServo();
 void init_i2c();
 void i2c_scan();
 void i2c_bus_recovery();
-Display ssd1306(128, 64, -1); // width, height, resetPin
+// Display ssd1306(128, 64, -1); // width, height, resetPin
 
-byte sensorData[8]; // UnitV_L,UnitV_R, Loadcell_L, Loadcell_R, BNO055_heading, BNO055_pitch,BNO055_roll,SW
+byte sensorData[19]; // UnitV_L,UnitV_R, Loadcell_L, Loadcell_R, BNO055_heading[2], BNO055_pitch[2],BNO055_roll[2],SW,ToF0[2],ToF1[2],ToF2[2],ToF3[2]
 void checkRPi();
 bool verifyCheckDigit(byte data[], int length, byte checkDigit);
 
@@ -62,6 +65,7 @@ void setup()
 {
   uart1.begin(115200);
   uart1.println("System Start");
+  uart6.begin(115200);
   servo_L.attach(Servo_L);
   servo_R.attach(Servo_R);
   servo_L.write(0);
@@ -84,13 +88,38 @@ void setup()
   uart2.begin(115200);
 }
 void checkRPi();
+
 void loop()
 {
+  buzzer.HappyBirthday();
+  buzzer.mute();
+  delay(500);
+  return;
+  // bno.read();
+  // bno.print();
+  // return;
+  // servo_L.write(70);
+  // delay(200);
+  // servo_L.write(0);
+  // delay(200);
+  // return;
+  // servo_R.write(140);
+  // delay(200);
+  // servo_R.write(180);
+  // delay(200);
+  // return;
 
-  servo_L.write(120);
+  sts3032.drive(80, 0);
+  delay(2000);
+  sts3032.stop();
   delay(1000);
-  servo_L.write(110);
+  sts3032.drive(-80, 0);
+  delay(2000);
+  sts3032.stop();
   delay(1000);
+  sts3032.drive(80, 100);
+  delay(1500);
+  sts3032.drive(80, -100);
   return;
 
   // if (!bno.read())
@@ -123,6 +152,9 @@ void loop()
   checkRPi();
   MoveServo();
   ReadSW();
+  checkRPi();
+  MoveServo();
+  ReadToF();
 }
 
 void checkRPi()
@@ -149,7 +181,7 @@ void checkRPi()
         uart2.write(seq);  // seq
         checkDigit ^= 0x00;
         checkDigit ^= seq;
-        for (int i = 0; i < 8; i++)
+        for (int i = 0; i < 19; i++)
         {
           uart2.write(sensorData[i]);
           checkDigit ^= sensorData[i];
@@ -340,11 +372,11 @@ void MoveServo()
       {
         if (cmd.isOpen)
         {
-          servo_R.write(110);
+          servo_R.write(140);
         }
         else
         {
-          servo_R.write(160);
+          servo_R.write(180);
         }
       }
       servoCommandQueue.pop();
@@ -402,15 +434,22 @@ void ReadLoadcell()
 void ReadBNO()
 {
   bno.read();
-  sensorData[4] = (byte)(((int)bno.heading / 2) & 0xFF);
-  sensorData[5] = (byte)(((int)bno.pitch / 2) & 0xFF);
-  sensorData[6] = (byte)(((int)bno.roll / 2) & 0xFF);
+  // int16_tに変換して、2バイトずつ格納
+  int16_t heading_int = (int16_t)(bno.heading * 100);
+  sensorData[4] = (byte)((heading_int >> 8) & 0xFF);
+  sensorData[5] = (byte)(heading_int & 0xFF);
+  int16_t pitch_int = (int16_t)(bno.pitch * 100);
+  sensorData[6] = (byte)((pitch_int >> 8) & 0xFF);
+  sensorData[7] = (byte)(pitch_int & 0xFF);
+  int16_t roll_int = (int16_t)(bno.roll * 100);
+  sensorData[8] = (byte)((roll_int >> 8) & 0xFF);
+  sensorData[9] = (byte)(roll_int & 0xFF);
 }
 
 void ReadSW()
 {
   // 各スイッチの情報を1ビットずつ
-  sensorData[7] = (digitalRead(SWpin[0]) << 7) + (digitalRead(SWpin[1]) << 6);
+  sensorData[10] = (digitalRead(SWpin[0]) << 7) + (digitalRead(SWpin[1]) << 6);
 }
 
 bool verifyCheckDigit(byte data[], int length, byte checkDigit)
@@ -422,4 +461,35 @@ bool verifyCheckDigit(byte data[], int length, byte checkDigit)
     cd ^= data[i];
   }
   return (cd == checkDigit);
+}
+
+void ReadToF()
+{
+  uart6.write(0);
+  while (uart6.available() < 9)
+  {
+    // wait for full data
+  }
+  for (int i = 0; i < 8; i++)
+  {
+    sensorData[11 + i] = uart6.read();
+  }
+  byte checksum = uart6.read();
+  byte cd = 0x00;
+  for (int i = 0; i < 8; i++)
+  {
+    cd ^= sensorData[11 + i];
+  }
+  if (cd != checksum)
+  {
+    // エラー。値を0にする
+    for (int i = 0; i < 8; i++)
+    {
+      sensorData[11 + i] = 0;
+    }
+  }
+  while (uart6.available())
+  {
+    uart6.read();
+  }
 }

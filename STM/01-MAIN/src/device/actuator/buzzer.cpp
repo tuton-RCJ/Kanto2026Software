@@ -22,6 +22,7 @@
 #define A5 880
 #define B5 988
 #define C6 1047
+#define Bb5 932
 
 Buzzer::Buzzer(int pin)
 {
@@ -233,4 +234,15 @@ void Buzzer::NotFound()
         {B4, 0.5},
         {C5, 0.5}};
     PlayMusic(notes, 5, 200);
+}
+
+void Buzzer::HappyBirthday()
+{
+    Note notes[] = {
+        {C5, 0.75}, {C5, 0.25}, {D5, 1},   {C5, 1},   {F5, 1},   {E5, 2},
+        {C5, 0.75}, {C5, 0.25}, {D5, 1},   {C5, 1},   {G5, 1},   {F5, 2},
+        {C5, 0.75}, {C5, 0.25}, {C6, 1},   {A5, 1},   {F5, 1},   {E5, 1},   {D5, 1},
+        {Bb5, 0.75},{Bb5, 0.25},{A5, 1},   {F5, 1},   {G5, 1},   {F5, 2},
+    };
+    PlayMusic(notes, 25, 150);
 }

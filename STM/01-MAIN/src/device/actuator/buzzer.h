@@ -27,6 +27,7 @@ public:
     void DetectedRedCorner();
     void NotFound();
     volatile bool isDisabled = false;
+    void HappyBirthday();
 
 private:
     int _pin;
