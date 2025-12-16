@@ -9,7 +9,7 @@
 
 
 // レポートタイプと間隔の定義
-#define FAST_MODE
+// #define FAST_MODE
 
 #ifdef FAST_MODE
   // Top frequency is reported to be 1000Hz (but freq is somewhat variable)

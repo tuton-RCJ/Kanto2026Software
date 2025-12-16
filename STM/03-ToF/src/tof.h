@@ -11,11 +11,12 @@ public:
     ToF();
     void init();
     
-    uint16_t tof_values[tof_num];
+    volatile uint16_t tof_values[tof_num];
     void getTofValues();
     void print(HardwareSerial *serial);
     // bool i2c_scanner();
     void XshutLow();
+    void update(); // アンブロッキングな読み取り
     
 
 private:

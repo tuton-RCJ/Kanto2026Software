@@ -122,3 +122,36 @@ void ToF::XshutLow()
         digitalWrite(tof_pins[i], LOW);
     }
 }
+
+void ToF::update()
+{
+    for (int i = 0; i < tof_num; i++)
+    {
+        // センサーのアドレス (initで設定した 0x30 + i)
+        int address = 0x30 + i;
+
+        // VL53L0Xのレジスタ 0x13 (RESULT_INTERRUPT_STATUS) をチェック
+        Wire.beginTransmission(address);
+        Wire.write(0x13);
+        Wire.endTransmission();
+        Wire.requestFrom(address, 1);
+
+        if (Wire.available())
+        {
+            byte status = Wire.read();
+            // ステータスの下位3ビットが非ゼロなら新しい測定データあり
+            if ((status & 0x07) != 0)
+            {
+                // データがあるので読み出す。
+                // ここで readRangeContinuousMillimeters を呼ぶと、
+                // すでにフラグが立っているので待機せずに即座に値を返してくれます。
+                tof_values[i] = tof_sensors[i].readRangeContinuousMillimeters();
+                
+                // 異常値(タイムアウト等)の場合は無視するか、前回の値を保持するならここを調整
+                if (tof_sensors[i].timeoutOccurred()) { 
+                    // エラー処理が必要なら記述
+                }
+            }
+        }
+    }
+}

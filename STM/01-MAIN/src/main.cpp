@@ -16,11 +16,14 @@ UnitV unitv_L(&uart4);
 UnitV unitv_R(&uart5);
 void ReadUnitV();
 
+#define isLoadcell false // loadcellを使う場合true,switchの場合false
 LoadCell loadcell(PC0, PC1);
-void ReadLoadcell();
+int switch_front[2] = {PB10, PB12};
+int switch_rear[2] = {PB13, PB14};
+void ReadBumper();
 
 // BNO055 bno(55, &Wire);
-BNO085 bno( &Wire, &uart1);
+BNO085 bno(&Wire, &uart1);
 void ReadBNO();
 
 const int SWpin[2] = {PA13, PA12};
@@ -84,17 +87,71 @@ void setup()
   led.turnOff();
   sts3032.isDisabled = false;
   sts3032.stop();
-
+  for (int i = 0; i < 2; i++)
+  {
+    pinMode(switch_front[i], INPUT);
+    pinMode(switch_rear[i], INPUT);
+    pinMode(SWpin[i], INPUT);
+  }
   uart2.begin(115200);
 }
 void checkRPi();
 
+void setToFboardLED(byte r, byte g, byte b)
+{
+  uart6.write(1); // LED制御コマンド
+  uart6.write(r);
+  uart6.write(g);
+  uart6.write(b);
+  byte checksum = 1 ^ r ^ g ^ b;
+  uart6.write(checksum);
+  // タイムアウト0.1秒で応答待ち
+  unsigned long startTime = millis();
+  while (uart6.available() < 1)
+  {
+    if (millis() - startTime > 100)
+    {
+      uart1.println("ToF LED set timeout");
+      return;
+    }
+  }
+  byte response = uart6.read();
+  if (response != 0x01)
+  {
+    uart1.println("ToF LED set error");
+  }
+  return;
+}
+unsigned long previousMillis = 0;
 void loop()
 {
-  buzzer.HappyBirthday();
-  buzzer.mute();
-  delay(500);
+  if(millis() - previousMillis < 2000){
+    sts3032.drive(50,100);
+  }
+  else if(millis() - previousMillis < 4000){
+    sts3032.drive(50,-100);
+  }
+  else{
+    previousMillis = millis();
+  }
+  ReadBNO();
+  uart1.println(bno.direction);
   return;
+  // uart1.println(millis());
+
+  // setToFboardLED(0, 0, 0);
+  // delay(500);
+  // setToFboardLED(0, 255, 0);
+  // delay(500);
+  // setToFboardLED(0, 0, 255);
+  // delay(500);
+  // setToFboardLED(255, 0, 0);
+  // delay(500);
+  // return;
+  // buzzer.HappyBirthday();
+  // buzzer.mute();
+  // delay(500);
+  // return;
   // bno.read();
   // bno.print();
   // return;
@@ -109,18 +166,18 @@ void loop()
   // delay(200);
   // return;
 
-  sts3032.drive(80, 0);
-  delay(2000);
-  sts3032.stop();
-  delay(1000);
-  sts3032.drive(-80, 0);
-  delay(2000);
-  sts3032.stop();
-  delay(1000);
-  sts3032.drive(80, 100);
-  delay(1500);
-  sts3032.drive(80, -100);
-  return;
+  // sts3032.drive(80, 0);
+  // delay(2000);
+  // sts3032.stop();
+  // delay(1000);
+  // sts3032.drive(-80, 0);
+  // delay(2000);
+  // sts3032.stop();
+  // delay(1000);
+  // sts3032.drive(80, 100);
+  // delay(1500);
+  // sts3032.drive(80, -100);
+  // return;
 
   // if (!bno.read())
   // {
@@ -145,7 +202,7 @@ void loop()
   ReadUnitV();
   checkRPi();
   MoveServo();
-  ReadLoadcell();
+  ReadBumper();
   checkRPi();
   MoveServo();
   ReadBNO();
@@ -250,6 +307,7 @@ void checkRPi()
         uart2.write(seq);        // seq
         uart2.write(0x02 ^ seq); // CD
       }
+
       else
       {
         uart1.println("CheckDigit Error!");
@@ -269,7 +327,7 @@ void checkRPi()
       byte data[5] = {type, seq, r, g, b};
       if (verifyCheckDigit(data, 5, CD))
       {
-        led.setColor(r, g, b);
+        setToFboardLED(r, g, b);
         // 返答
         uart2.write(0x03);       // type
         uart2.write(seq);        // seq
@@ -424,11 +482,19 @@ void ReadUnitV()
   sensorData[1] = (byte)(unitv_R.status & 0xFF);
 }
 
-void ReadLoadcell()
+void ReadBumper()
 {
-  loadcell.read();
-  sensorData[2] = (byte)((loadcell.values[0] / 64) & 0xFF);
-  sensorData[3] = (byte)((loadcell.values[1] / 64) & 0xFF);
+  if (isLoadcell)
+  {
+    loadcell.read();
+    sensorData[2] = (byte)((loadcell.values[0] / 64) & 0xFF);
+    sensorData[3] = (byte)((loadcell.values[1] / 64) & 0xFF);
+  }
+  else
+  {
+    sensorData[2] = (byte)(digitalRead(switch_front[0]) << 7 | digitalRead(switch_front[1]) << 6);
+    sensorData[3] = (byte)(digitalRead(switch_rear[0]) << 7 | digitalRead(switch_rear[1]) << 6);
+  }
 }
 
 void ReadBNO()
@@ -492,4 +558,14 @@ void ReadToF()
   {
     uart6.read();
   }
+
+  // ToFの値をintにしてuart1に出力
+  // uart1.print("ToF: ");
+  // for (int i = 0; i < 4; i++)
+  // {
+  //   int distance = ((int)sensorData[11 + i * 2] << 8) + (int)sensorData[12 + i * 2];
+  //   uart1.print(distance);
+  //   uart1.print(" ");
+  // }
+  // uart1.println();
 }
