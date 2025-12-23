@@ -36,7 +36,11 @@ void Buzzer::setFrequency(int freq)
     {
         return;
     }
-
+    if (freq == 0)
+    {
+        analogWrite(_pin, 0);
+        return;
+    }
     analogWriteFrequency(freq);
     analogWrite(_pin, 64);
 }
@@ -44,6 +48,13 @@ void Buzzer::setFrequency(int freq)
 void Buzzer::mute()
 {
     analogWrite(_pin, 0);
+    if (_currentMusic != nullptr)
+    {
+        // 音楽再生中なら楽譜を削除
+        _currentMusic = nullptr;
+        nextNoteIndex = 0;
+        nextNoteTime = 0;
+    }
 }
 
 void Buzzer::beep(int note, double duration)
@@ -67,68 +78,6 @@ void Buzzer::boot()
     };
 
     PlayMusic(notes, 3, 400);
-}
-
-void Buzzer::ObjectDetected()
-{
-    Note notes[] = {
-        {E4, 0.5},
-        {A4, 0.5},
-        {G4, 0.5},
-        {E4, 0.5},
-        {A4, 0.5},
-        {G4, 0.5},
-    };
-
-    PlayMusic(notes, 6, 200);
-}
-
-void Buzzer::GreenMarker(int p)
-{
-    if (p == 1)
-    {
-        Note notes[] = {
-            {C5, 0.5},
-            {G5, 0.5},
-        };
-        PlayMusic(notes, 2, 100);
-        return;
-    }
-    if (p == 2)
-    {
-        Note notes[] = {
-            {C5, 0.5},
-            {G5, 0.5},
-            {E5, 0.5},
-        };
-        PlayMusic(notes, 3, 100);
-        return;
-    }
-    if (p == 3)
-    {
-        Note notes[] = {
-            {C5, 0.5},
-            {G5, 0.5},
-            {E5, 0.5},
-            {C5, 0.5},
-        };
-        PlayMusic(notes, 4, 100);
-        return;
-    }
-}
-
-void Buzzer::EnterEvacuationZone()
-{
-    Note notes[] = {
-        {C5, 0.5},
-        {E5, 0.5},
-        {G5, 0.5},
-        {F5, 0.5},
-        {E5, 0.5},
-        {G5, 0.5},
-        {C6, 0.5},
-    };
-    PlayMusic(notes, 7, 200);
 }
 
 void Buzzer::kouka()
@@ -177,72 +126,66 @@ void Buzzer::PlayMusic(Note *notes, int length, int bpm)
     }
 }
 
-void Buzzer::DetectedBlackBall()
-{
-    Note notes[] = {
-        {C5, 0.5},
-        {E5, 0.5},
-        {C5, 0.5},
-        {E5, 0.5},
-    };
-    PlayMusic(notes, 4, 200);
-}
-
-void Buzzer::DetectedSilverBall()
-{
-    Note notes[] = {
-        {C5, 0.5},
-        {E5, 0.5},
-        {C5, 0.5},
-        {E5, 0.5},
-        {C5, 0.5},
-        {E5, 0.5},
-    };
-    PlayMusic(notes, 6, 200);
-}
-
-void Buzzer::DetectedGreenCorner()
-{
-    Note notes[] = {
-        {G5, 0.5},
-        {E5, 0.5},
-        {G5, 0.5},
-        {E5, 0.5},
-        {G5, 0.5},
-        {E5, 0.5},
-
-    };
-    PlayMusic(notes, 6, 200);
-}
-
-void Buzzer::DetectedRedCorner()
-{
-    Note notes[] = {
-        {G5, 0.5},
-        {E5, 0.5},
-        {G5, 0.5},
-        {E5, 0.5}};
-    PlayMusic(notes, 4, 200);
-}
-
-void Buzzer::NotFound()
-{
-    Note notes[] = {
-        {C5, 0.5},
-        {B4, 0.5},
-        {C5, 0.5},
-        {B4, 0.5},
-        {C5, 0.5}};
-    PlayMusic(notes, 5, 200);
-}
-
 void Buzzer::HappyBirthday()
 {
     Note notes[] = {
-        {C5, 0.75}, {C5, 0.25}, {D5, 1},   {C5, 1},   {F5, 1},   {E5, 2},
-        {C5, 0.75}, {C5, 0.25}, {D5, 1},   {C5, 1},   {G5, 1},   {F5, 2},
-        {C5, 0.75}, {C5, 0.25}, {C6, 1},   {A5, 1},   {F5, 1},   {E5, 1},   {D5, 1},
-        {Bb5, 0.75},{Bb5, 0.25},{A5, 1},   {F5, 1},   {G5, 1},   {F5, 2},
+        {C5, 0.75},
+        {C5, 0.25},
+        {D5, 1},
+        {C5, 1},
+        {F5, 1},
+        {E5, 2},
+        {C5, 0.75},
+        {C5, 0.25},
+        {D5, 1},
+        {C5, 1},
+        {G5, 1},
+        {F5, 2},
+        {C5, 0.75},
+        {C5, 0.25},
+        {C6, 1},
+        {A5, 1},
+        {F5, 1},
+        {E5, 1},
+        {D5, 1},
+        {Bb5, 0.75},
+        {Bb5, 0.25},
+        {A5, 1},
+        {F5, 1},
+        {G5, 1},
+        {F5, 2},
     };
     PlayMusic(notes, 25, 150);
+}
+
+void Buzzer::RegisterMusic(NoteMillis *music)
+{
+    _currentMusic = music;
+    nextNoteIndex = 0;
+    nextNoteTime = 0;
+}
+
+void Buzzer::update()
+{
+    if (_currentMusic == nullptr || isDisabled)
+    {
+        return;
+    }
+
+    unsigned long currentTime = millis();
+    if (currentTime >= nextNoteTime)
+    {
+        NoteMillis currentNote = _currentMusic[nextNoteIndex];
+        setFrequency(currentNote.note);
+        nextNoteTime = currentTime + currentNote.duration;
+        nextNoteIndex++;
+        if (nextNoteIndex >= sizeof(_currentMusic) / sizeof(_currentMusic[0]))
+        {
+            // 音楽の終了
+            mute();
+            _currentMusic = nullptr; // 音楽をリセット
+            nextNoteIndex = 0;
+            nextNoteTime = 0;
+        }
+    }
 }

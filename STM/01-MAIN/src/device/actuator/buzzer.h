@@ -5,9 +5,17 @@
 
 struct Note
 {
-    int note;
-    double duration;
+    int note;        // frequency in Hz
+    double duration; // in beats
 };
+
+struct NoteMillis
+{
+    int note;     // frequency in Hz
+    int duration; // milliseconds
+};
+
+
 
 class Buzzer
 {
@@ -19,20 +27,18 @@ public:
     void boot();
     void EnterEvacuationZone();
     void PlayMusic(Note *notes, int length, int bpm);
-    void ObjectDetected();
-    void GreenMarker(int p);
-    void DetectedSilverBall();  
-    void DetectedBlackBall();
-    void DetectedGreenCorner();
-    void DetectedRedCorner();
-    void NotFound();
     volatile bool isDisabled = false;
     void HappyBirthday();
+    void RegisterMusic(NoteMillis *music);
+    void update();
 
 private:
     int _pin;
     int _bpm;
     void setFrequency(int freq);
+    NoteMillis *_currentMusic;
+    int nextNoteIndex = 0;
+    unsigned long nextNoteTime = 0;
 };
 
 #endif

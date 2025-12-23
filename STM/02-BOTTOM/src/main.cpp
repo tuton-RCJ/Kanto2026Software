@@ -82,6 +82,7 @@ void checkRPi()
 {
   if (uart2.available() > 2)
   {
+    uart1.println("Command Received");
     // uart1.println("Received Command from RPi");
     byte type = uart2.read();
     byte seq = uart2.read();
