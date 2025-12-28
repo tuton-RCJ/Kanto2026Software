@@ -29,6 +29,20 @@ void setup()
 
 void loop()
 {
+  // for(int i = 0; i < LED_NUM; i++)
+  // {
+  //   pixels.setPixelColor(i, pixels.Color(0, 0, 0));
+  // }
+  // pixels.show();
+  // delay(500);
+  // for(int i = 0; i < LED_NUM; i++)
+  // {
+  //   pixels.setPixelColor(i, pixels.Color(50, 50, 50));
+  // }
+  // pixels.show();
+  // delay(500);
+  // return;
+
   // uart1.println(millis());
   tof.update();
   // tof.print(&uart1);

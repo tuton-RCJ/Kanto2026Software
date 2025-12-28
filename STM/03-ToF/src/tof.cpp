@@ -48,7 +48,10 @@ int ToF::init_tof_sensors(int i)
         tof_sensors[i].setAddress(0x30 + i);
     }
     tof_sensors[i].setMeasurementTimingBudget(50000);
-
+    // tof_sensors[i].setSignalRateLimit(0.1);
+    // increase laser pulse periods (defaults are 14 and 10 PCLKs)
+    // tof_sensors[i].setVcselPulsePeriod(VL53L0X::VcselPeriodPreRange, 18);
+    // tof_sensors[i].setVcselPulsePeriod(VL53L0X::VcselPeriodFinalRange, 14);
     tof_sensors[i].startContinuous();
 
     // delay(100);

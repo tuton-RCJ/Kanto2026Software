@@ -28,6 +28,8 @@ Buzzer::Buzzer(int pin)
 {
     _pin = pin;
     pinMode(_pin, OUTPUT);
+    _currentMusic = nullptr;
+    _currentMusicLength = 0;
 }
 
 void Buzzer::setFrequency(int freq)
@@ -52,6 +54,7 @@ void Buzzer::mute()
     {
         // 音楽再生中なら楽譜を削除
         _currentMusic = nullptr;
+        _currentMusicLength = 0;
         nextNoteIndex = 0;
         nextNoteTime = 0;
     }
@@ -158,9 +161,26 @@ void Buzzer::HappyBirthday()
     PlayMusic(notes, 25, 150);
 }
 
-void Buzzer::RegisterMusic(NoteMillis *music)
+void Buzzer::RegisterMusic(const NoteMillis *music, int length)
 {
-    _currentMusic = music;
+    if (music == nullptr || length <= 0)
+    {
+        mute();
+        return;
+    }
+
+    if (length > MAX_MUSIC_LEN)
+    {
+        length = MAX_MUSIC_LEN;
+    }
+
+    for (int i = 0; i < length; i++)
+    {
+        _musicBuffer[i] = music[i];
+    }
+
+    _currentMusic = _musicBuffer;
+    _currentMusicLength = length;
     nextNoteIndex = 0;
     nextNoteTime = 0;
 }
@@ -175,17 +195,23 @@ void Buzzer::update()
     unsigned long currentTime = millis();
     if (currentTime >= nextNoteTime)
     {
+        if (nextNoteIndex >= _currentMusicLength)
+        {
+            // 音楽の終了
+            mute();
+            return;
+        }
+
         NoteMillis currentNote = _currentMusic[nextNoteIndex];
         setFrequency(currentNote.note);
         nextNoteTime = currentTime + currentNote.duration;
         nextNoteIndex++;
-        if (nextNoteIndex >= sizeof(_currentMusic) / sizeof(_currentMusic[0]))
-        {
-            // 音楽の終了
-            mute();
-            _currentMusic = nullptr; // 音楽をリセット
-            nextNoteIndex = 0;
-            nextNoteTime = 0;
-        }
     }
+}
+
+void Buzzer::jingleBells()
+{
+    Note notes[] = {
+        {E5, 0.5}, {E5, 0.5}, {E5, 1}, {E5, 0.5}, {E5, 0.5}, {E5, 1}, {E5, 0.5}, {G5, 0.5}, {C5, 0.75}, {D5, 0.25}, {E5, 2}, {F5, 0.5}, {F5, 0.5}, {F5, 0.5}, {F5, 0.5}, {F5, 0.5}, {E5, 0.5}, {E5, 0.5}, {E5, 0.5}, {E5, 0.5}, {D5, 0.5}, {D5, 0.5}, {E5, 0.5}, {D5, 1}, {G5, 1}, {E5, 0.5}, {E5, 0.5}, {E5, 1}, {E5, 0.5}, {E5, 0.5}, {E5, 1}, {E5, 0.5}, {G5, 0.5}, {C5, 0.75}, {D5, 0.25}, {E5, 2}, {F5, 0.5}, {F5, 0.5}, {F5, 0.5}, {F5, 0.5}, {F5, 0.5}, {E5, 0.5}, {E5, 0.5}, {E5, 0.5}, {G5, 0.5}, {G5, 0.5}, {F5, 0.5}, {D5, 0.5}, {C5, 2}};
+    PlayMusic(notes, sizeof(notes) / sizeof(notes[0]), 150);
 }

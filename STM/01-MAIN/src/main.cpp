@@ -9,7 +9,7 @@
 HardwareSerial uart1(PA10, PA9);              // USB
 HardwareSerial uart2(PA3, PA2);               // RPi
 HardwareSerial uart3(PC_11_ALT1, PC_10_ALT1); // STS3032
-HardwareSerial uart4(PA1, PA0);               // UnitV Left
+HardwareSerial uart4(PA_1, PA_0);             // UnitV Left
 HardwareSerial uart5(PD_2, PC_12);            // UnitV Right
 HardwareSerial uart6(PC_7, PC_6);             // ToF module
 UnitV unitv_L(&uart4);
@@ -41,7 +41,7 @@ const int Servo_L = PC9;
 const int Servo_R = PB9;
 Servo servo_L;
 Servo servo_R;
-// void DropRescueKit(bool isLeft);
+void DropRescueKit(bool isLeft);
 void MoveServo();
 
 void init_i2c();
@@ -94,6 +94,7 @@ void setup()
         pinMode(SWpin[i], INPUT);
     }
     uart2.begin(115200);
+    buzzer.boot();
 }
 void checkRPi();
 
@@ -125,85 +126,7 @@ void setToFboardLED(byte r, byte g, byte b)
 unsigned long previousMillis = 0;
 void loop()
 {
-    // ReadBNO();
-    // bno.print();
-    // return;
-    // if(millis() - previousMillis < 2000){
-    //   sts3032.drive(50,100);
-    // }
-    // else if(millis() - previousMillis < 4000){
-    //   sts3032.drive(50,-100);
-    // }
-    // else{
-    //   previousMillis = millis();
-    // }
-    // ReadBNO();
-    // uart1.println(bno.direction);
-    // return;
-    // uart1.println(millis());
-
-    // setToFboardLED(0, 0, 0);
-    // delay(500);
-    // setToFboardLED(0, 255, 0);
-    // delay(500);
-    // setToFboardLED(0, 0, 255);
-    // delay(500);
-    // setToFboardLED(255, 0, 0);
-    // delay(500);
-    // return;
-    // buzzer.HappyBirthday();
-    // buzzer.mute();
-    // delay(500);
-    // return;
-    // bno.read();
-    // bno.print();
-    // return;
-    // servo_L.write(70);
-    // delay(200);
-    // servo_L.write(0);
-    // delay(200);
-    // return;
-    // servo_R.write(140);
-    // delay(200);
-    // servo_R.write(180);
-    // delay(200);
-    // return;
-
-    // sts3032.drive(80, 0);
-    // delay(2000);
-    // sts3032.stop();
-    // delay(1000);
-    // sts3032.drive(-80, 0);
-    // delay(2000);
-    // sts3032.stop();
-    // delay(1000);
-    // sts3032.drive(80, 100);
-    // delay(1500);
-    // sts3032.stop();
-    // delay(1000);
-    // sts3032.drive(80, -100);
-    // delay(1500);
-    // sts3032.stop();
-    // delay(1000);
-    // return;
-
-    // if (!bno.read())
-    // {
-    //   uart1.println("BNO055 read error");
-    //   // reset i2c
-    //   i2c_bus_recovery();
-    //   delay(10);
-    //   return;
-    // }
-    // // bno.read();
-    // bno.print(&uart1);
-    // delay(50);
-    // return;
-    // if (uart2.available())
-    // {
-    //   uart1.write(uart2.read());
-    // }
-    // return;
+    // uart1.println("Main Loop Start");
 
     checkRPi();
     MoveServo();
@@ -212,12 +135,14 @@ void loop()
     MoveServo();
     ReadBumper();
     checkRPi();
+    // return;
     MoveServo();
     ReadBNO();
     checkRPi();
     MoveServo();
     ReadSW();
     checkRPi();
+    // return;
     MoveServo();
     ReadToF();
     buzzer.update();
@@ -225,7 +150,7 @@ void loop()
 
 void checkRPi()
 {
-
+    // uart1.println("Checking RPi Command...");
     if (uart2.available() > 2)
     {
         // uart1.println("Received Command from RPi");
@@ -355,25 +280,60 @@ void checkRPi()
             {
             }
             byte musicLength = uart2.read();
-            NoteMillis notes[musicLength];
-            while (uart2.available() < musicLength * 4 + 1)
+            constexpr int MAX_MUSIC_LEN = 300;
+            NoteMillis notes[MAX_MUSIC_LEN];
+            int effectiveLength = (int)musicLength;
+            if (effectiveLength > MAX_MUSIC_LEN)
             {
+                effectiveLength = MAX_MUSIC_LEN;
             }
+            uart1.println("Buzzer Music Command Received");
+            uart1.print("Length: ");
+            uart1.println((int)musicLength);
+            // while (uart2.available() < musicLength * 4 + 1)
+            // {
+            //     uart1.println((int)uart2.available());
+            // }
+            // for (int i = 0; i < musicLength * 4 + 1; i++)
+            // {
+            //     // wait for full data
+            // }
+
             byte CD = 0x04 ^ seq ^ musicLength;
             for (int i = 0; i < musicLength; i++)
             {
+                while (uart2.available() < 4)
+                {
+                    // wait for full note data
+                }
                 byte note_h = uart2.read();
                 byte note_l = uart2.read();
                 byte dur_h = uart2.read();
                 byte dur_l = uart2.read();
-                notes[i].note = ((int)note_h << 8) | (int)note_l;
-                notes[i].duration = ((int)dur_h << 8) | (int)dur_l;
+                if (i < effectiveLength)
+                {
+                    notes[i].note = ((int)note_h << 8) | (int)note_l;
+                    notes[i].duration = ((int)dur_h << 8) | (int)dur_l;
+                }
                 CD ^= note_h ^ note_l ^ dur_h ^ dur_l;
+            }
+            while (uart2.available() < 1)
+            {
+                // wait for check digit
             }
             byte receivedCD = uart2.read();
             if (CD == receivedCD)
             {
-                buzzer.RegisterMusic(notes);
+                uart1.println("CheckDigit OK!");
+                if (effectiveLength <= 0)
+                {
+                    buzzer.mute();
+                }
+                else
+                {
+                    buzzer.RegisterMusic(notes, effectiveLength);
+                }
+
                 // 返答
                 uart2.write(0x04);       // type
                 uart2.write(seq);        // seq
@@ -495,17 +455,17 @@ void DropRescueKit(bool isLeft)
 {
     if (isLeft)
     {
-        servo_L.write(70);
-        delay(400);
+        servo_L.write(66);
+        delay(200);
         servo_L.write(0);
-        delay(400);
+        delay(200);
     }
     else
     {
-        servo_R.write(110);
-        delay(400);
-        servo_R.write(160);
-        delay(400);
+        servo_R.write(90);
+        delay(200);
+        servo_R.write(180);
+        delay(200);
     }
 }
 
