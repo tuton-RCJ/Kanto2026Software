@@ -71,8 +71,8 @@ void setup()
     uart6.begin(115200);
     servo_L.attach(Servo_L);
     servo_R.attach(Servo_R);
-    servo_L.write(0);
-    servo_R.write(140);
+    servo_L.write(150);
+    servo_R.write(60);
 
     init_i2c();
     // delay(50);
@@ -127,7 +127,11 @@ unsigned long previousMillis = 0;
 void loop()
 {
     // uart1.println("Main Loop Start");
-
+    // servo_R.write(180);
+    // delay(500);
+    // servo_R.write(60);
+    // delay(500);
+    // return;
     checkRPi();
     MoveServo();
     ReadUnitV();
@@ -233,7 +237,7 @@ void checkRPi()
                     cmd.executeTime = currentTime + i * 800;
                     servoCommandQueue.push(cmd);
                     cmd.isOpen = false;
-                    cmd.executeTime = currentTime + i * 800 + 400;
+                    cmd.executeTime = currentTime + i * 800 + 350;
                     servoCommandQueue.push(cmd);
                 }
                 // 返答
@@ -424,22 +428,22 @@ void MoveServo()
             {
                 if (cmd.isOpen)
                 {
-                    servo_L.write(70);
+                    servo_L.write(30);
                 }
                 else
                 {
-                    servo_L.write(0);
+                    servo_L.write(150);
                 }
             }
             else
             {
                 if (cmd.isOpen)
                 {
-                    servo_R.write(140);
+                    servo_R.write(180);
                 }
                 else
                 {
-                    servo_R.write(180);
+                    servo_R.write(60);
                 }
             }
             servoCommandQueue.pop();
