@@ -10,10 +10,10 @@ last_color_label = None
 character_count = 0
 color_count = 0
 min_confidence = 0.9
-thre_green = [(30,100, -60, -25, -5, 20)]
-thre_red = [(20, 100
-, 40, 70, 30, 70)]
-thre_yellow = [(50, 100, -30, -10, 30, 70)]
+thre_green = [(20,100, -50, -20, -10, 20)]
+thre_red = [(50, 100
+, 60, 85, 50, 80)]
+thre_yellow = [(50, 100, -40, -15, 50, 80)]
 task = None
 
 fm.register(35, fm.fpioa.UART1_TX, force=True)
@@ -22,7 +22,7 @@ fm.register(34, fm.fpioa.UART1_RX, force=True)
 uart = UART(UART.UART1, 115200,8, None, 1, timeout=1000, read_buf_len=4096)
 
 labels = ("H", "None", "S", "U")
-sensor_window=(224, 224)
+sensor_window=(96, 16, 224, 224)
 
 # UART codes (1 byte)
 CHAR_CODES = {"U": 1, "S": 2, "H": 3}
@@ -73,7 +73,7 @@ def detect_character_victim(img):
 def detect_colored_victim(img):
     global last_color_label
     global color_count
-    if img.find_blobs(thre_red, pixels_threshold=200, merge=True):
+    if img.find_blobs(thre_red, pixels_threshold=100, merge=True):
         if last_color_label == "R":
             color_count += 1
         else:
@@ -83,7 +83,7 @@ def detect_colored_victim(img):
             color_count = 2
             return COLOR_CODES["R"]
         return 0
-    elif img.find_blobs(thre_green, pixels_threshold=200 , merge=True):
+    elif img.find_blobs(thre_green, pixels_threshold=100 , merge=True):
         if last_color_label == "G":
             color_count += 1
         else:
@@ -93,7 +93,7 @@ def detect_colored_victim(img):
             color_count = 2
             return COLOR_CODES["G"]
         return 0
-    elif img.find_blobs(thre_yellow, pixels_threshold=200, merge=True):
+    elif img.find_blobs(thre_yellow, pixels_threshold=100, merge=True):
         if last_color_label == "Y":
             color_count += 1
         else:
@@ -112,12 +112,11 @@ def main(model_addr=0x300000):
     sensor.reset()
     sensor.set_pixformat(sensor.RGB565)
     sensor.set_framesize(sensor.QVGA)
-    sensor.set_windowing(sensor_window)
-    sensor.set_auto_whitebal(False, rgb_gain_db = (64, 87, 246)) # ゲインを設定しておく
-
-    sensor.set_brightness(0)            # 明度の調整
-    sensor.set_saturation(0)            # 彩度の調整
-    sensor.set_contrast(2)              # コントラストの調整
+    sensor.set_auto_exposure(False,16533)
+    sensor.set_auto_gain(False, 80)
+    sensor.set_auto_whitebal(False, (87, 64, 110))
+    sensor.set_windowing((0,8, 224, 224))
+    sensor.skip_frames(time = 2000)
     global task
     task = kpu.load(model_addr)
 
@@ -126,8 +125,8 @@ def main(model_addr=0x300000):
             img = sensor.snapshot()
             if img is None or task is None:
                 continue
-            ch = detect_character_victim(img)
             col = detect_colored_victim(img)
+            ch = detect_character_victim(img)
             if ch:
                 send(ch)
                 print(ch)
