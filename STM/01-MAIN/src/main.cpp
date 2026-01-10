@@ -126,6 +126,8 @@ void setToFboardLED(byte r, byte g, byte b)
 unsigned long previousMillis = 0;
 void loop()
 {
+    // buzzer.Shougatu();
+    // return;
     // uart1.println("Main Loop Start");
     // servo_R.write(180);
     // delay(500);
@@ -489,6 +491,19 @@ void ReadUnitV()
     sensorData[0] = (byte)(unitv_L.status & 0xFF);
     unitv_R.read();
     sensorData[1] = (byte)(unitv_R.status & 0xFF);
+
+    // if (unitv_L.status != 0)
+    // {
+    //     led.setColor(255, 0, 0);
+    // }
+    // else if (unitv_R.status != 0)
+    // {
+    //     led.setColor(0, 0, 255);
+    // }
+    // else
+    // {
+    //     led.setColor(0, 0, 0);
+    // }
 }
 
 void ReadBumper()

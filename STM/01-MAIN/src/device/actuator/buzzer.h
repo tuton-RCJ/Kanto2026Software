@@ -30,6 +30,7 @@ public:
     void jingleBells();
     void RegisterMusic(const NoteMillis *music, int length);
     void update();
+    void Shougatu();
 
 private:
     int _pin;

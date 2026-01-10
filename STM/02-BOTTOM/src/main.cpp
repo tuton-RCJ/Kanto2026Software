@@ -2,6 +2,8 @@
 #include <Adafruit_NeoPixel.h>
 #include "colorsensor.h"
 
+#define PhotoRefPin PA5_ALT0
+
 #define CS_RANGE PB5
 #define CS_GATE PB3
 #define CS_CK PB4
@@ -29,9 +31,14 @@ void checkRPi();
 bool verifyCheckDigit(byte data[], int length, byte checkDigit);
 void setup()
 {
+  uart1.begin(115200);
+  pinMode(PhotoRefPin, INPUT);
+  pinMode(PA2, OUTPUT);
+  return;
+
   AFIO->MAPR |= AFIO_MAPR_PD01_REMAP;
   strip.begin();
-  strip.setBrightness(100);
+  strip.setBrightness(70);
   strip.fill(Adafruit_NeoPixel::Color(255, 255, 255)); // 全部指定した色にする
   strip.show();
 
@@ -54,7 +61,16 @@ void setup()
 
 void loop()
 {
-
+  uart1.println(analogRead(PhotoRefPin));
+  if (analogRead(PhotoRefPin) < 850)
+  {
+    digitalWrite(PA2, HIGH);
+  }
+  else
+  {
+    digitalWrite(PA2, LOW);
+  }
+  return;
   if (millis() - measuringStartTime >= waitTime)
   {
     colorsensor.end();
@@ -116,7 +132,7 @@ void checkRPi()
     }
     else if (type == 0x01)
     {
-      while (uart2.available() < 4)
+      while (uart2.available() < 5)
       {
         // wait for full command
       }
@@ -124,10 +140,12 @@ void checkRPi()
       byte r = uart2.read();
       byte g = uart2.read();
       byte b = uart2.read();
+      byte brightness = uart2.read();
       byte CD = uart2.read();
-      byte data[5] = {type, seq, r, g, b};
-      if (verifyCheckDigit(data, 5, CD))
+      byte data[6] = {type, seq, r, g, b, brightness};
+      if (verifyCheckDigit(data, 6, CD))
       {
+        strip.setBrightness(brightness);
         strip.fill(Adafruit_NeoPixel::Color(r, g, b)); // 全部指定した色にする
         strip.show();
         // 返答

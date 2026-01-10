@@ -161,6 +161,30 @@ void Buzzer::HappyBirthday()
     PlayMusic(notes, 25, 150);
 }
 
+void Buzzer::Shougatu()
+{
+    Note notes[] = {
+        {E3,1},
+        {B3,0.5},
+        {D4,0.5},
+        {E4,0.5},
+        {A4,0.5},
+        {B4,0.5},
+        {A4,0.5},
+        {E4,3},
+        {0,1},
+        {E3,1},
+        {B3,0.5},
+        {D4,0.5},
+        {E4,0.5},
+        {A4,0.5},
+        {B4,0.5},
+        {D5,0.5},
+        {E5,3},
+        {0,1},
+    };
+    PlayMusic(notes, 18, 120);
+}
 void Buzzer::RegisterMusic(const NoteMillis *music, int length)
 {
     if (music == nullptr || length <= 0)
