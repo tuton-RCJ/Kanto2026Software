@@ -15,6 +15,10 @@ HardwareSerial uart6(PC_7, PC_6);             // ToF module
 UnitV unitv_L(&uart4);
 UnitV unitv_R(&uart5);
 void ReadUnitV();
+int unitV_L_lastStatus;
+int unitV_R_lastStatus;
+unsigned long unitV_L_lastUpdatedTime;
+unsigned long unitV_R_lastUpdatedTime;
 
 #define isLoadcell false // loadcellを使う場合true,switchの場合false
 LoadCell loadcell(PC0, PC1);
@@ -49,7 +53,7 @@ void i2c_scan();
 void i2c_bus_recovery();
 // Display ssd1306(128, 64, -1); // width, height, resetPin
 
-byte sensorData[19]; // UnitV_L,UnitV_R, Loadcell_L, Loadcell_R, BNO055_heading[2], BNO055_pitch[2],BNO055_roll[2],SW,ToF0[2],ToF1[2],ToF2[2],ToF3[2]
+byte sensorData[21]; // UnitV_L,UnitV_R,UnitV_L_Time,UnitV_R_Time, Loadcell_L, Loadcell_R, BNO055_heading[2], BNO055_pitch[2],BNO055_roll[2],SW,ToF0[2],ToF1[2],ToF2[2],ToF3[2]
 void checkRPi();
 bool verifyCheckDigit(byte data[], int length, byte checkDigit);
 
@@ -95,6 +99,11 @@ void setup()
     }
     uart2.begin(115200);
     buzzer.boot();
+
+    unitV_L_lastStatus=-1;
+    unitV_R_lastStatus=-1;
+    unitV_L_lastUpdatedTime=millis();
+    unitV_R_lastUpdatedTime=millis();
 }
 void checkRPi();
 
@@ -178,7 +187,7 @@ void checkRPi()
                 uart2.write(seq);  // seq
                 checkDigit ^= 0x00;
                 checkDigit ^= seq;
-                for (int i = 0; i < 19; i++)
+                for (int i = 0; i < 21; i++)
                 {
                     uart2.write(sensorData[i]);
                     checkDigit ^= sensorData[i];
@@ -491,6 +500,17 @@ void ReadUnitV()
     sensorData[0] = (byte)(unitv_L.status & 0xFF);
     unitv_R.read();
     sensorData[1] = (byte)(unitv_R.status & 0xFF);
+    if(unitV_L_lastStatus!=unitv_L.status){
+        unitV_L_lastUpdatedTime=millis();
+        unitV_L_lastStatus=unitv_L.status;
+    }
+    if(unitV_R_lastStatus!=unitv_R.status){
+        unitV_R_lastUpdatedTime=millis();
+        unitV_R_lastStatus=unitv_R.status;
+    }
+    unsigned long currentTime = millis();
+    sensorData[2] = (byte)(((currentTime - unitV_L_lastUpdatedTime)>0xFF ? 0xFF : (currentTime - unitV_L_lastUpdatedTime)) & 0xFF);
+    sensorData[3] = (byte)(((currentTime - unitV_R_lastUpdatedTime)>0xFF ? 0xFF : (currentTime - unitV_R_lastUpdatedTime)) & 0xFF);
 
     // if (unitv_L.status != 0)
     // {
@@ -511,13 +531,13 @@ void ReadBumper()
     if (isLoadcell)
     {
         loadcell.read();
-        sensorData[2] = (byte)((loadcell.values[0] / 64) & 0xFF);
-        sensorData[3] = (byte)((loadcell.values[1] / 64) & 0xFF);
+        sensorData[4] = (byte)((loadcell.values[0] / 64) & 0xFF);
+        sensorData[5] = (byte)((loadcell.values[1] / 64) & 0xFF);
     }
     else
     {
-        sensorData[2] = (byte)(digitalRead(switch_front[0]) << 7 | digitalRead(switch_front[1]) << 6);
-        sensorData[3] = (byte)(digitalRead(switch_rear[0]) << 7 | digitalRead(switch_rear[1]) << 6);
+        sensorData[4] = (byte)(digitalRead(switch_front[0]) << 7 | digitalRead(switch_front[1]) << 6);
+        sensorData[5] = (byte)(digitalRead(switch_rear[0]) << 7 | digitalRead(switch_rear[1]) << 6);
     }
     // uart1.print("Bumper Front: ");
     // uart1.println(sensorData[2]);
@@ -528,20 +548,20 @@ void ReadBNO()
     bno.read();
     // int16_tに変換して、2バイトずつ格納
     int16_t heading_int = (int16_t)(bno.heading * 100);
-    sensorData[4] = (byte)((heading_int >> 8) & 0xFF);
-    sensorData[5] = (byte)(heading_int & 0xFF);
+    sensorData[6] = (byte)((heading_int >> 8) & 0xFF);
+    sensorData[7] = (byte)(heading_int & 0xFF);
     int16_t pitch_int = (int16_t)(bno.pitch * 100);
-    sensorData[6] = (byte)((pitch_int >> 8) & 0xFF);
-    sensorData[7] = (byte)(pitch_int & 0xFF);
+    sensorData[8] = (byte)((pitch_int >> 8) & 0xFF);
+    sensorData[9] = (byte)(pitch_int & 0xFF);
     int16_t roll_int = (int16_t)(bno.roll * 100);
-    sensorData[8] = (byte)((roll_int >> 8) & 0xFF);
-    sensorData[9] = (byte)(roll_int & 0xFF);
+    sensorData[10] = (byte)((roll_int >> 8) & 0xFF);
+    sensorData[11] = (byte)(roll_int & 0xFF);
 }
 
 void ReadSW()
 {
     // 各スイッチの情報を1ビットずつ
-    sensorData[10] = (digitalRead(SWpin[0]) << 7) + (digitalRead(SWpin[1]) << 6);
+    sensorData[12] = (digitalRead(SWpin[0]) << 7) + (digitalRead(SWpin[1]) << 6);
 }
 
 bool verifyCheckDigit(byte data[], int length, byte checkDigit)
@@ -564,20 +584,20 @@ void ReadToF()
     }
     for (int i = 0; i < 8; i++)
     {
-        sensorData[11 + i] = uart6.read();
+        sensorData[13 + i] = uart6.read();
     }
     byte checksum = uart6.read();
     byte cd = 0x00;
     for (int i = 0; i < 8; i++)
     {
-        cd ^= sensorData[11 + i];
+        cd ^= sensorData[13 + i];
     }
     if (cd != checksum)
     {
         // エラー。値を0にする
         for (int i = 0; i < 8; i++)
         {
-            sensorData[11 + i] = 0;
+            sensorData[13 + i] = 0;
         }
     }
     while (uart6.available())
