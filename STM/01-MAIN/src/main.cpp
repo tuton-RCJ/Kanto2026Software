@@ -68,6 +68,7 @@ struct ServoCommand
 };
 std::queue<ServoCommand> servoCommandQueue;
 
+int LEDblinkTestCnt = 0;
 void setup()
 {
     uart1.begin(115200);
@@ -100,10 +101,11 @@ void setup()
     uart2.begin(115200);
     buzzer.boot();
 
-    unitV_L_lastStatus=-1;
-    unitV_R_lastStatus=-1;
-    unitV_L_lastUpdatedTime=millis();
-    unitV_R_lastUpdatedTime=millis();
+    unitV_L_lastStatus = -1;
+    unitV_R_lastStatus = -1;
+    unitV_L_lastUpdatedTime = millis();
+    unitV_R_lastUpdatedTime = millis();
+    LEDblinkTestCnt = 0;
 }
 void checkRPi();
 
@@ -135,6 +137,41 @@ void setToFboardLED(byte r, byte g, byte b)
 unsigned long previousMillis = 0;
 void loop()
 {
+    // uart1.println("SW1: " + String(digitalRead(SWpin[0])) + " SW2: " + String(digitalRead(SWpin[1])));
+    // return;
+    if (digitalRead(SWpin[1]) == HIGH && digitalRead(SWpin[0]) == LOW)
+    {
+        for (int i = 0; i < 5; i++)
+        {
+            if (LEDblinkTestCnt == 3)
+            {
+                setToFboardLED(255, 255, 255);
+                delay(1000);
+                setToFboardLED(0, 0, 0);
+                delay(1000);
+            }
+            else
+            {
+                if (LEDblinkTestCnt == 0)
+                {
+                    setToFboardLED(0, 0, 255);
+                }
+                else if (LEDblinkTestCnt == 1)
+                {
+                    setToFboardLED(255, 255, 0);
+                }
+                else if (LEDblinkTestCnt == 2)
+                {
+                    setToFboardLED(255, 0, 0);
+                }
+                delay(500);
+                setToFboardLED(0, 0, 0);
+                delay(500);
+            }
+
+        }
+        LEDblinkTestCnt = (LEDblinkTestCnt + 1) % 4;
+    }
     // buzzer.Shougatu();
     // return;
     // uart1.println("Main Loop Start");
@@ -500,17 +537,19 @@ void ReadUnitV()
     sensorData[0] = (byte)(unitv_L.status & 0xFF);
     unitv_R.read();
     sensorData[1] = (byte)(unitv_R.status & 0xFF);
-    if(unitV_L_lastStatus!=unitv_L.status){
-        unitV_L_lastUpdatedTime=millis();
-        unitV_L_lastStatus=unitv_L.status;
+    if (unitV_L_lastStatus != unitv_L.status)
+    {
+        unitV_L_lastUpdatedTime = millis();
+        unitV_L_lastStatus = unitv_L.status;
     }
-    if(unitV_R_lastStatus!=unitv_R.status){
-        unitV_R_lastUpdatedTime=millis();
-        unitV_R_lastStatus=unitv_R.status;
+    if (unitV_R_lastStatus != unitv_R.status)
+    {
+        unitV_R_lastUpdatedTime = millis();
+        unitV_R_lastStatus = unitv_R.status;
     }
     unsigned long currentTime = millis();
-    sensorData[2] = (byte)(((currentTime - unitV_L_lastUpdatedTime)>0xFF ? 0xFF : (currentTime - unitV_L_lastUpdatedTime)) & 0xFF);
-    sensorData[3] = (byte)(((currentTime - unitV_R_lastUpdatedTime)>0xFF ? 0xFF : (currentTime - unitV_R_lastUpdatedTime)) & 0xFF);
+    sensorData[2] = (byte)(((currentTime - unitV_L_lastUpdatedTime) > 0xFF ? 0xFF : (currentTime - unitV_L_lastUpdatedTime)) & 0xFF);
+    sensorData[3] = (byte)(((currentTime - unitV_R_lastUpdatedTime) > 0xFF ? 0xFF : (currentTime - unitV_R_lastUpdatedTime)) & 0xFF);
 
     // if (unitv_L.status != 0)
     // {
