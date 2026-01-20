@@ -62,7 +62,7 @@ void setup()
 void loop()
 {
   uart1.println(analogRead(PhotoRefPin));
-  if (analogRead(PhotoRefPin) < 850)
+  if (analogRead(PhotoRefPin) < 910)
   {
     digitalWrite(PA2, HIGH);
   }
