@@ -1,6 +1,5 @@
 #include <Arduino.h>
 #include <Adafruit_NeoPixel.h>
-#include "tof.h"
 #include "ToF_VL53L4CX.h"
 
 // put function declarations here:
@@ -11,266 +10,135 @@ HardwareSerial uart2(PA3, PA2);
 #define LED_NUM 8
 Adafruit_NeoPixel pixels(LED_NUM, LED_PIN, NEO_GRB + NEO_KHZ800);
 
-// ToF tof;
 ToF_VL53L4CX tof_vl53l4cx;
 #define uart uart2
 
+byte seq;
 void setup()
 {
   uart1.begin(115200);
+  pinMode(PC2, OUTPUT);
+  digitalWrite(PC2, LOW); // Power off VL53L4CX
+  pinMode(PC4, OUTPUT);
+  digitalWrite(PC4, LOW); // Power off VL53L4CX
+  pinMode(PC6, OUTPUT);
+  digitalWrite(PC6, LOW); // Power off VL53L4CX
+
   Wire.setSCL(PB6);
   Wire.setSDA(PB7);
+  Wire.setClock(800000);
   Wire.begin();
+  Wire.setClock(800000);
   uart2.begin(115200);
   // tof.init();
+  delay(50);
+  tof_vl53l4cx.init();
+
   pixels.begin();
   pixels.show(); // Initialize all pixels to 'off'
   pixels.setBrightness(160);
-  tof_vl53l4cx.init();
+  // for (int i = 0; i < LED_NUM; i++)
+  // {
+  //   pixels.setPixelColor(i, pixels.Color(255, 0, 0));
+  // }
+  // pixels.show();
+  // delay(1000);
+  // for (int i = 0; i < LED_NUM; i++)
+  // {
+  //   pixels.setPixelColor(i, pixels.Color(0, 0, 0));
+  // }
+  // pixels.show();
+  seq = 0;
 }
 
 void loop()
 {
   tof_vl53l4cx.update(&uart1);
-  return;
-  // for(int i = 0; i < LED_NUM; i++)
-  // {
-  //   pixels.setPixelColor(i, pixels.Color(0, 0, 0));
-  // }
-  // pixels.show();
-  // delay(500);
-  // for(int i = 0; i < LED_NUM; i++)
-  // {
-  //   pixels.setPixelColor(i, pixels.Color(50, 50, 50));
-  // }
-  // pixels.show();
-  // delay(500);
-  // return;
 
-  // uart1.println(millis());
-  // tof.update();
-  // tof.print(&uart1);
-  // return;
+  // データ送信
+  // VL53L4CXはデータ受信に時間がかかるので、測定終了後に垂れ流す
+  //---------------------------------------------------
+  byte checksum = 0;
+  // ヘッダー：0xFF 0xFF
+  uart.write(0xFF);
+  uart.write(0xFF);
+  // シーケンス番号
+  uart.write(seq);
+  if (seq == 255)
+  {
+    seq = 0;
+  }
+  else
+  {
+    seq++;
+  }
+  checksum ^= 0xFF;
+  checksum ^= 0xFF;
+  checksum ^= seq;
+  for (int i = 0; i < tof_num; i++)
+  {
+    uint16_t value = tof_vl53l4cx.tof_values[i];
+    uart.write((value >> 8) & 0xFF); // 上位バイト
+    uart.write(value & 0xFF);        // 下位バイト
+    checksum ^= (value >> 8) & 0xFF;
+    checksum ^= value & 0xFF;
+  }
+  uart.write(checksum);
+  //---------------------------------------------------
 
-  // if (uart.available())
-  // {
-  //   byte data = uart.read();
-  //   if (data == 0)
-  //   {
-  //     byte checksum = 0; // すべてのXORを送信
-  //     // 4つのセンサの値をuart1に送信
-  //     for (int i = 0; i < tof_num; i++)
-  //     {
-  //       uint16_t value = tof.tof_values[i];
-  //       uart.write((value >> 8) & 0xFF); // 上位バイト
-  //       uart.write(value & 0xFF);        // 下位バイト
-  //       checksum ^= (value >> 8) & 0xFF;
-  //       checksum ^= value & 0xFF;
-  //     }
-  //     uart.write(checksum);
-  //   }
-  //   if (data == 1)
-  //   {
-  //     // タイムアウト0.5秒
-  //     unsigned long startMillis = millis();
-  //     // LEDを指定されたRGBに設定。チェックディジット（XOR）が一致を確認。
-  //     while (uart.available() < 4)
-  //     {
-  //       if (millis() - startMillis > 500)
-  //       {
-  //         while (uart.available())
-  //           uart.read();
-  //         // タイムアウト
-  //         return;
-  //       }
-  //     }
-  //     byte r = uart.read();
-  //     byte g = uart.read();
-  //     byte b = uart.read();
-  //     byte checksum = uart.read();
-  //     if (checksum == (1 ^ r ^ g ^ b))
-  //     {
-  //       for (int i = 0; i < LED_NUM; i++)
-  //       {
-  //         pixels.setPixelColor(i, pixels.Color(r, g, b));
-  //       }
-  //       pixels.show();
-  //     }
-  //     // ACKを返す
-  //     uart.write(0x01);
-  //   }
-  //   while (uart.available())
-  //   {
-  //     uart.read();
-  //   }
-  // }
+  // コマンド受信
+  //---------------------------------------------------
+  if (uart.available())
+  {
+    byte data = uart.read();
+    if (data == 0)
+    {
+      // byte checksum = 0; // すべてのXORを送信
+      // // 4つのセンサの値をuart1に送信
+      // for (int i = 0; i < tof_num; i++)
+      // {
+      //   uint16_t value = tof.tof_values[i];
+      //   uart.write((value >> 8) & 0xFF); // 上位バイト
+      //   uart.write(value & 0xFF);        // 下位バイト
+      //   checksum ^= (value >> 8) & 0xFF;
+      //   checksum ^= value & 0xFF;
+      // }
+      // uart.write(checksum);
+    }
+    if (data == 1)
+    {
+      // タイムアウト0.5秒
+      unsigned long startMillis = millis();
+      // LEDを指定されたRGBに設定。チェックディジット（XOR）が一致を確認。
+      while (uart.available() < 4)
+      {
+        if (millis() - startMillis > 500)
+        {
+          while (uart.available())
+            uart.read();
+          // タイムアウト
+          return;
+        }
+      }
+      byte r = uart.read();
+      byte g = uart.read();
+      byte b = uart.read();
+      byte checksum = uart.read();
+      if (checksum == (1 ^ r ^ g ^ b))
+      {
+        for (int i = 0; i < LED_NUM; i++)
+        {
+          pixels.setPixelColor(i, pixels.Color(r, g, b));
+        }
+        pixels.show();
+      }
+      // ACKを返す
+      uart.write(0x01);
+    }
+    while (uart.available())
+    {
+      uart.read();
+    }
+  }
+  //---------------------------------------------------
 }
-
-// /**
-//  ******************************************************************************
-//  * @file    VL53L4CX_Sat_HelloWorld.ino
-//  * @author  SRA
-//  * @version V1.0.0
-//  * @date    16 March 2022
-//  * @brief   Arduino test application for the STMicrolectronics VL53L4CX
-//  *          proximity sensor satellite based on FlightSense.
-//  *          This application makes use of C++ classes obtained from the C
-//  *          components' drivers.
-//  ******************************************************************************
-//  * @attention
-//  *
-//  * <h2><center>&copy; COPYRIGHT(c) 2022 STMicroelectronics</center></h2>
-//  *
-//  * Redistribution and use in source and binary forms, with or without modification,
-//  * are permitted provided that the following conditions are met:
-//  *   1. Redistributions of source code must retain the above copyright notice,
-//  *      this list of conditions and the following disclaimer.
-//  *   2. Redistributions in binary form must reproduce the above copyright notice,
-//  *      this list of conditions and the following disclaimer in the documentation
-//  *      and/or other materials provided with the distribution.
-//  *   3. Neither the name of STMicroelectronics nor the names of its contributors
-//  *      may be used to endorse or promote products derived from this software
-//  *      without specific prior written permission.
-//  *
-//  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-//  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-//  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-//  * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-//  * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-//  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-//  * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-//  * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-//  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-//  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//  *
-//  ******************************************************************************
-//  */
-// /*
-//  * To use this sketch you need to connect the VL53L4CD satellite sensor directly to the Nucleo board with wires in this way:
-//  * pin 1 (GND) of the VL53L4CD satellite connected to GND of the Nucleo board
-//  * pin 2 (VDD) of the VL53L4CD satellite connected to 3V3 pin of the Nucleo board
-//  * pin 3 (SCL) of the VL53L4CD satellite connected to pin D15 (SCL) of the Nucleo board
-//  * pin 4 (SDA) of the VL53L4CD satellite connected to pin D14 (SDA) of the Nucleo board
-//  * pin 5 (GPIO1) of the VL53L4CD satellite connected to pin A2 of the Nucleo board
-//  * pin 6 (XSHUT) of the VL53L4CD satellite connected to pin A1 of the Nucleo board
-//  */
-// /* Includes ------------------------------------------------------------------*/
-// #include <Arduino.h>
-// #include <Wire.h>
-// #include <vl53l4cx_class.h>
-// #include <string.h>
-// #include <stdlib.h>
-// #include <stdio.h>
-// #include <stdint.h>
-// #include <assert.h>
-// #include <stdlib.h>
-
-// #include <Adafruit_NeoPixel.h>
-
-// HardwareSerial uart1(PA10, PA9);
-// HardwareSerial uart2(PA3, PA2);
-
-// #define LED_PIN PA14
-// #define LED_NUM 8
-// Adafruit_NeoPixel pixels(LED_NUM, LED_PIN, NEO_GRB + NEO_KHZ800);
-
-// #define DEV_I2C Wire
-// #define SerialPort uart1
-
-// // #ifndef LED_BUILTIN
-// //   #define LED_BUILTIN 13
-// // #endif
-// // #define LedPin LED_BUILTIN
-
-// // Components.
-// VL53L4CX sensor_vl53l4cx_sat(&DEV_I2C, A1);
-
-// /* Setup ---------------------------------------------------------------------*/
-
-// void setup()
-// {
-//   // Led.
-//   // pinMode(LedPin, OUTPUT);
-
-//   // Initialize serial for output.
-//   SerialPort.begin(115200);
-//   SerialPort.println("Starting...");
-
-//   // Initialize I2C bus.
-//     Wire.setSCL(PB6);
-//   Wire.setSDA(PB7);
-// //   Wire.begin();
-//   DEV_I2C.begin();
-
-//   // Configure VL53L4CX satellite component.
-//   sensor_vl53l4cx_sat.begin();
-
-//   // Switch off VL53L4CX satellite component.
-//   sensor_vl53l4cx_sat.VL53L4CX_Off();
-
-//   //Initialize VL53L4CX satellite component.
-//   sensor_vl53l4cx_sat.InitSensor(0x12);
-
-//   // Start Measurements
-//   sensor_vl53l4cx_sat.VL53L4CX_StartMeasurement();
-//   pixels.begin();
-//   pixels.show(); // Initialize all pixels to 'off'
-//   pixels.setBrightness(160);
-//   for(int i = 0; i < LED_NUM; i++)
-//   {
-//     pixels.setPixelColor(i, pixels.Color(255, 0, 0));
-//   }
-//   pixels.show();
-//   delay(1000);
-//   for(int i = 0; i < LED_NUM; i++)
-//   {
-//     pixels.setPixelColor(i, pixels.Color(0, 0, 0));
-//   }
-//   pixels.show();
-
-// }
-
-// void loop()
-// {
-//   VL53L4CX_MultiRangingData_t MultiRangingData;
-//   VL53L4CX_MultiRangingData_t *pMultiRangingData = &MultiRangingData;
-//   uint8_t NewDataReady = 0;
-//   int no_of_object_found = 0, j;
-//   char report[64];
-//   int status;
-
-//   do {
-//     status = sensor_vl53l4cx_sat.VL53L4CX_GetMeasurementDataReady(&NewDataReady);
-//   } while (!NewDataReady);
-
-//   //Led on
-//   // digitalWrite(LedPin, HIGH);
-
-//   if ((!status) && (NewDataReady != 0)) {
-//     status = sensor_vl53l4cx_sat.VL53L4CX_GetMultiRangingData(pMultiRangingData);
-//     no_of_object_found = pMultiRangingData->NumberOfObjectsFound;
-//     snprintf(report, sizeof(report), "VL53L4CX Satellite: Count=%d, #Objs=%1d ", pMultiRangingData->StreamCount, no_of_object_found);
-//     SerialPort.print(report);
-//     for (j = 0; j < no_of_object_found; j++) {
-//       if (j != 0) {
-//         SerialPort.print("\r\n                               ");
-//       }
-//       SerialPort.print("status=");
-//       SerialPort.print(pMultiRangingData->RangeData[j].RangeStatus);
-//       SerialPort.print(", D=");
-//       SerialPort.print(pMultiRangingData->RangeData[j].RangeMilliMeter);
-//       SerialPort.print("mm");
-//       SerialPort.print(", Signal=");
-//       SerialPort.print((float)pMultiRangingData->RangeData[j].SignalRateRtnMegaCps / 65536.0);
-//       SerialPort.print(" Mcps, Ambient=");
-//       SerialPort.print((float)pMultiRangingData->RangeData[j].AmbientRateRtnMegaCps / 65536.0);
-//       SerialPort.print(" Mcps");
-//     }
-//     SerialPort.println("");
-//     if (status == 0) {
-//       status = sensor_vl53l4cx_sat.VL53L4CX_ClearInterruptAndStartMeasurement();
-//     }
-//   }
-
-//   // digitalWrite(LedPin, LOW);
-// }
