@@ -21,9 +21,12 @@ void ToF_VL53L4CX::init()
         tof_sensors[i].InitSensor(0x12 + i * 2);
         // tof_sensors[i].VL53L4CX_SetDistanceMode(VL53L4CX_DISTANCEMODE_SHORT);
         tof_sensors[i].VL53L4CX_SetMeasurementTimingBudgetMicroSeconds(15000);
-        tof_sensors[i].VL53L4CX_StartMeasurement();
 
         delay(10);
+    }
+    for (int i = 0; i < tof_num; i++)
+    {
+        tof_sensors[i].VL53L4CX_StartMeasurement();
     }
 }
 
@@ -46,8 +49,9 @@ void ToF_VL53L4CX::print(HardwareSerial *serial)
 //     }
 // }
 
-void ToF_VL53L4CX::update(HardwareSerial *SerialPort)
+byte ToF_VL53L4CX::update(HardwareSerial *SerialPort)
 {
+    byte value_changed = 0x00;
     for (int i = 0; i < 4; i++)
     {
         VL53L4CX_MultiRangingData_t MultiRangingData;
@@ -69,9 +73,9 @@ void ToF_VL53L4CX::update(HardwareSerial *SerialPort)
 
         if ((!status) && (NewDataReady != 0))
         {
-            SerialPort->print("S");
+            // SerialPort->print("S");
             // SerialPort->print("Sensor Number: ");
-            // SerialPort->print(i);
+            SerialPort->println(i);
             // SerialPort->print(" - Time: ");
             // SerialPort->print(millis());
             // SerialPort->print(" ms - ");
@@ -116,6 +120,8 @@ void ToF_VL53L4CX::update(HardwareSerial *SerialPort)
             {
                 status = tof_sensors[i].VL53L4CX_ClearInterruptAndStartMeasurement();
             }
+            value_changed |= (1 << i);
         }
     }
+    return value_changed;
 }

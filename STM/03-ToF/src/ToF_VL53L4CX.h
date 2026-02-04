@@ -18,7 +18,7 @@ public:
     void print(HardwareSerial *serial);
     // bool i2c_scanner();
     // void XshutLow();
-    void update(HardwareSerial *SerialPort); // アンブロッキングな読み取り
+    byte update(HardwareSerial *SerialPort); // アンブロッキングな読み取り
 
 private:
     int tof_pins[4] = {PC0, PC2, PC4, PC6};

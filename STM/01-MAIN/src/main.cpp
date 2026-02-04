@@ -168,7 +168,6 @@ void loop()
                 setToFboardLED(0, 0, 0);
                 delay(500);
             }
-
         }
         LEDblinkTestCnt = (LEDblinkTestCnt + 1) % 4;
     }
@@ -616,41 +615,86 @@ bool verifyCheckDigit(byte data[], int length, byte checkDigit)
 
 void ReadToF()
 {
-    uart6.write(0);
-    while (uart6.available() < 9)
-    {
-        // wait for full data
-    }
-    for (int i = 0; i < 8; i++)
-    {
-        sensorData[13 + i] = uart6.read();
-    }
-    byte checksum = uart6.read();
-    byte cd = 0x00;
-    for (int i = 0; i < 8; i++)
-    {
-        cd ^= sensorData[13 + i];
-    }
-    if (cd != checksum)
-    {
-        // エラー。値を0にする
-        for (int i = 0; i < 8; i++)
-        {
-            sensorData[13 + i] = 0;
-        }
-    }
+    // 送られてくる形式：
+    //  ヘッダー 0xFF 0xFF シーケンス番号 1バイト データ8バイト チェックディジット1バイト
+
+    // ヘッダーチェック
+    byte prevByte = 0x00;
     while (uart6.available())
     {
-        uart6.read();
+        byte currByte = uart6.read();
+        // uart1.println(String(currByte, HEX));
+        if (prevByte == 0xFF && currByte == 0xFF)
+        {
+            // ヘッダー検出
+            while (uart6.available() < 10)
+            {
+                // wait for full data
+            }
+            byte seq = uart6.read();
+            for (int i = 0; i < 8; i++)
+            {
+                sensorData[13 + i] = uart6.read();
+            }
+            byte checksum = uart6.read();
+            byte cd = 0x00;
+            cd ^= 0xFF;
+            cd ^= 0xFF;
+            cd ^= seq;
+            for (int i = 0; i < 8; i++)
+            {
+                cd ^= sensorData[13 + i];
+            }
+            if (cd != checksum)
+            {
+                // エラー。値を0にする
+                for (int i = 0; i < 8; i++)
+                {
+                    sensorData[13 + i] = 0;
+                }
+                uart1.println("checksum Error");
+            }
+            prevByte = 0x00;
+        }
+        prevByte = currByte;
     }
+
+    // 旧方式：リクエスト&レスポンス
+    // uart6.write(0);
+    // while (uart6.available() < 9)
+    // {
+    //     // wait for full data
+    // }
+    // for (int i = 0; i < 8; i++)
+    // {
+    //     sensorData[13 + i] = uart6.read();
+    // }
+    // byte checksum = uart6.read();
+    // byte cd = 0x00;
+    // for (int i = 0; i < 8; i++)
+    // {
+    //     cd ^= sensorData[13 + i];
+    // }
+    // if (cd != checksum)
+    // {
+    //     // エラー。値を0にする
+    //     for (int i = 0; i < 8; i++)
+    //     {
+    //         sensorData[13 + i] = 0;
+    //     }
+    // }
+    // while (uart6.available())
+    // {
+    //     uart6.read();
+    // }
 
     // ToFの値をintにしてuart1に出力
     // uart1.print("ToF: ");
     // for (int i = 0; i < 4; i++)
     // {
-    //   int distance = ((int)sensorData[11 + i * 2] << 8) + (int)sensorData[12 + i * 2];
-    //   uart1.print(distance);
-    //   uart1.print(" ");
+    //     int distance = ((int)sensorData[13 + i * 2] << 8) + (int)sensorData[13 + i * 2 + 1];
+    //     uart1.print(distance);
+    //     uart1.print(" ");
     // }
     // uart1.println();
 }

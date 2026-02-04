@@ -14,6 +14,9 @@ ToF_VL53L4CX tof_vl53l4cx;
 #define uart uart2
 
 byte seq;
+
+byte value_changed;
+
 void setup()
 {
   uart1.begin(115200);
@@ -49,42 +52,56 @@ void setup()
   // }
   // pixels.show();
   seq = 0;
+  value_changed = 0x00;
 }
 
 void loop()
 {
-  tof_vl53l4cx.update(&uart1);
+  value_changed |= tof_vl53l4cx.update(&uart1);
+  if (value_changed == 0x0F)
+  {
+    uart1.println(millis());
+    // for(int i=0;i<4;i++){
+    //   uart1.print("ToF ");
+    //   uart1.print(i);
+    //   uart1.print(": ");
+    //   uart1.print(tof_vl53l4cx.tof_values[i]);
+    //   uart1.println(" mm");
+    // }
 
-  // データ送信
-  // VL53L4CXはデータ受信に時間がかかるので、測定終了後に垂れ流す
-  //---------------------------------------------------
-  byte checksum = 0;
-  // ヘッダー：0xFF 0xFF
-  uart.write(0xFF);
-  uart.write(0xFF);
-  // シーケンス番号
-  uart.write(seq);
-  if (seq == 255)
-  {
-    seq = 0;
+    // データ送信
+    // VL53L4CXはデータ受信に時間がかかるので、測定終了後に垂れ流す
+    //---------------------------------------------------
+    byte checksum = 0;
+    // ヘッダー：0xFF 0xFF
+    uart.write(0xFF);
+    uart.write(0xFF);
+    // シーケンス番号
+    if (seq == 0xFE)
+    {
+      seq = 0;
+    }
+    else
+    {
+      seq++;
+    }
+    uart.write(seq);
+
+    checksum ^= 0xFF;
+    checksum ^= 0xFF;
+    checksum ^= seq;
+    for (int i = 0; i < 4; i++)
+    {
+      uint16_t value = tof_vl53l4cx.tof_values[i];
+      uart.write((value >> 8) & 0xFF); // 上位バイト
+      uart.write(value & 0xFE);        // 下位バイト
+      checksum ^= (value >> 8) & 0xFF;
+      checksum ^= value & 0xFE;
+    }
+    uart.write(checksum);
+    //---------------------------------------------------
+    value_changed = 0x00;
   }
-  else
-  {
-    seq++;
-  }
-  checksum ^= 0xFF;
-  checksum ^= 0xFF;
-  checksum ^= seq;
-  for (int i = 0; i < tof_num; i++)
-  {
-    uint16_t value = tof_vl53l4cx.tof_values[i];
-    uart.write((value >> 8) & 0xFF); // 上位バイト
-    uart.write(value & 0xFF);        // 下位バイト
-    checksum ^= (value >> 8) & 0xFF;
-    checksum ^= value & 0xFF;
-  }
-  uart.write(checksum);
-  //---------------------------------------------------
 
   // コマンド受信
   //---------------------------------------------------
