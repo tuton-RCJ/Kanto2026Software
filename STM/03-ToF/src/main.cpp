@@ -60,7 +60,7 @@ void loop()
   value_changed |= tof_vl53l4cx.update(&uart1);
   if (value_changed == 0x0F)
   {
-    uart1.println(millis());
+    // uart1.println(millis());
     // for(int i=0;i<4;i++){
     //   uart1.print("ToF ");
     //   uart1.print(i);

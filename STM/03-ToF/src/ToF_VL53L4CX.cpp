@@ -75,7 +75,7 @@ byte ToF_VL53L4CX::update(HardwareSerial *SerialPort)
         {
             // SerialPort->print("S");
             // SerialPort->print("Sensor Number: ");
-            SerialPort->println(i);
+            // SerialPort->println(i);
             // SerialPort->print(" - Time: ");
             // SerialPort->print(millis());
             // SerialPort->print(" ms - ");
