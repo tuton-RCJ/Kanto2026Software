@@ -5,6 +5,7 @@
 #define I2C_SCL PB6
 #include <queue>
 #include <Wire.h>
+#include <type_traits>
 
 HardwareSerial uart1(PA10, PA9);              // USB
 HardwareSerial uart2(PA3, PA2);               // RPi
@@ -53,6 +54,31 @@ void i2c_scan();
 void i2c_bus_recovery();
 // Display ssd1306(128, 64, -1); // width, height, resetPin
 
+namespace
+{
+    template <typename W>
+    auto configureWireTimeoutImpl(W &wire, int) -> decltype(wire.setWireTimeout(2500U, true), void())
+    {
+        wire.setWireTimeout(2500U, true);
+    }
+
+    template <typename W>
+    auto configureWireTimeoutImpl(W &wire, long) -> decltype(wire.setTimeout(2500U), void())
+    {
+        wire.setTimeout(2500U);
+    }
+
+    inline void configureWireTimeoutImpl(...)
+    {
+    }
+
+    void configureWireTimeout(TwoWire &wire)
+    {
+        configureWireTimeoutImpl(wire, 0);
+        configureWireTimeoutImpl(wire, 0L);
+    }
+}
+
 byte sensorData[21]; // UnitV_L,UnitV_R,UnitV_L_Time,UnitV_R_Time, Loadcell_L, Loadcell_R, BNO055_heading[2], BNO055_pitch[2],BNO055_roll[2],SW,ToF0[2],ToF1[2],ToF2[2],ToF3[2]
 void checkRPi();
 bool verifyCheckDigit(byte data[], int length, byte checkDigit);
@@ -69,6 +95,7 @@ struct ServoCommand
 std::queue<ServoCommand> servoCommandQueue;
 
 int LEDblinkTestCnt = 0;
+
 void setup()
 {
     uart1.begin(115200);
@@ -81,8 +108,14 @@ void setup()
 
     init_i2c();
     // delay(50);
-
-    uart1.println(bno.begin());
+    sts3032.isDisabled = false;
+    sts3032.stop();
+    while (bno.begin() == false)
+    {
+        uart1.println("BNO085 not connected, retrying...");
+        i2c_bus_recovery();
+        delay(500);
+    }
 
     // delay(50);
     // ssd1306.begin();
@@ -90,8 +123,7 @@ void setup()
 
     led.setBrightness(20);
     led.turnOff();
-    sts3032.isDisabled = false;
-    sts3032.stop();
+
     for (int i = 0; i < 2; i++)
     {
         pinMode(switch_front[i], INPUT);
@@ -197,6 +229,8 @@ void loop()
     MoveServo();
     ReadToF();
     buzzer.update();
+    // uart1.println("Main Loop End");
+    bno.print();
 }
 
 void checkRPi()
@@ -204,14 +238,25 @@ void checkRPi()
     // uart1.println("Checking RPi Command...");
     if (uart2.available() > 2)
     {
-        // uart1.println("Received Command from RPi");
+        uart1.println("Received Command from RPi");
         byte type = uart2.read();
         byte seq = uart2.read();
+        uart1.print("Command Type: ");
+        uart1.println((int)type);
+        uart1.print("Sequence: ");
+        uart1.println((int)seq);
+
         if (type == 0x00)
         {
+            unsigned long startTime = millis();
             while (uart2.available() < 1)
             {
                 // wait for check digit
+                if (millis() - startTime > 100)
+                {
+                    uart1.println("Timeout waiting for Check Digit");
+                    return;
+                }
             }
             // センサーデータ送信
             byte CD = uart2.read();
@@ -237,9 +282,18 @@ void checkRPi()
         }
         else if (type == 0x01)
         {
+            unsigned long startTime = millis();
             while (uart2.available() < 3)
             {
-                // wait for full command
+                if (millis() - startTime > 100)
+                {
+                    uart1.println("Timeout waiting for STS3032 command");
+                    while (uart2.available())
+                    {
+                        uart2.read();
+                    }
+                    return;
+                }
             }
             // STS3032動作指令
             byte leftSpeed = uart2.read();
@@ -261,9 +315,18 @@ void checkRPi()
         }
         else if (type == 2)
         {
+            unsigned long startTime = millis();
             while (uart2.available() < 3)
             {
-                // wait for full command
+                if (millis() - startTime > 100)
+                {
+                    uart1.println("Timeout waiting for DropRescueKit command");
+                    while (uart2.available())
+                    {
+                        uart2.read();
+                    }
+                    return;
+                }
             }
             // 救助キット投下指令
             byte side = uart2.read();
@@ -300,9 +363,18 @@ void checkRPi()
         }
         else if (type == 3)
         {
+            unsigned long startTime = millis();
             while (uart2.available() < 4)
             {
-                // wait for full command
+                if (millis() - startTime > 100)
+                {
+                    uart1.println("Timeout waiting for LED command");
+                    while (uart2.available())
+                    {
+                        uart2.read();
+                    }
+                    return;
+                }
             }
             // LED制御命令
             byte r = uart2.read();
@@ -327,8 +399,18 @@ void checkRPi()
         else if (type == 4)
         {
             // Buzzer Control Command
+            unsigned long startTime = millis();
             while (uart2.available() < 1)
             {
+                if (millis() - startTime > 100)
+                {
+                    uart1.println("Timeout waiting for music length");
+                    while (uart2.available())
+                    {
+                        uart2.read();
+                    }
+                    return;
+                }
             }
             byte musicLength = uart2.read();
             constexpr int MAX_MUSIC_LEN = 300;
@@ -353,9 +435,18 @@ void checkRPi()
             byte CD = 0x04 ^ seq ^ musicLength;
             for (int i = 0; i < musicLength; i++)
             {
+                unsigned long noteStart = millis();
                 while (uart2.available() < 4)
                 {
-                    // wait for full note data
+                    if (millis() - noteStart > 200)
+                    {
+                        uart1.println("Timeout waiting for note data");
+                        while (uart2.available())
+                        {
+                            uart2.read();
+                        }
+                        return;
+                    }
                 }
                 byte note_h = uart2.read();
                 byte note_l = uart2.read();
@@ -368,9 +459,18 @@ void checkRPi()
                 }
                 CD ^= note_h ^ note_l ^ dur_h ^ dur_l;
             }
+            unsigned long cdStart = millis();
             while (uart2.available() < 1)
             {
-                // wait for check digit
+                if (millis() - cdStart > 200)
+                {
+                    uart1.println("Timeout waiting for music check digit");
+                    while (uart2.available())
+                    {
+                        uart2.read();
+                    }
+                    return;
+                }
             }
             byte receivedCD = uart2.read();
             if (CD == receivedCD)
@@ -413,7 +513,9 @@ void init_i2c()
     Wire.setSCL(I2C_SCL);
     Wire.begin();
     Wire.setClock(100000); // 100kHz
+    configureWireTimeout(Wire);
 }
+
 void i2c_bus_recovery()
 {
     pinMode(I2C_SDA, INPUT_PULLUP);
@@ -440,7 +542,7 @@ void i2c_bus_recovery()
     delayMicroseconds(5);
 
     // I2Cを再初期化
-    Wire.begin();
+    init_i2c();
 }
 
 void i2c_scan()
@@ -583,7 +685,26 @@ void ReadBumper()
 
 void ReadBNO()
 {
-    bno.read();
+    static bool bnoFailing = false;
+    static unsigned long bnoFailSinceMs = 0;
+    if (!bno.read())
+    {
+        if (!bnoFailing)
+        {
+            bnoFailing = true;
+            bnoFailSinceMs = millis();
+        }
+
+        if (millis() - bnoFailSinceMs > 800)
+        {
+            uart1.println("BNO085 read failed >800ms, recovering I2C...");
+            i2c_bus_recovery();
+            bno.begin();
+            bnoFailing = false;
+        }
+        return;
+    }
+    bnoFailing = false;
     // int16_tに変換して、2バイトずつ格納
     int16_t heading_int = (int16_t)(bno.heading * 100);
     sensorData[6] = (byte)((heading_int >> 8) & 0xFF);
@@ -627,9 +748,19 @@ void ReadToF()
         if (prevByte == 0xFF && currByte == 0xFF)
         {
             // ヘッダー検出
+            unsigned long startTime = millis();
             while (uart6.available() < 10)
             {
-                // wait for full data
+                if (millis() - startTime > 30)
+                {
+                    uart1.println("ToF packet timeout");
+                    while (uart6.available())
+                    {
+                        uart6.read();
+                    }
+                    prevByte = 0x00;
+                    return;
+                }
             }
             byte seq = uart6.read();
             for (int i = 0; i < 8; i++)

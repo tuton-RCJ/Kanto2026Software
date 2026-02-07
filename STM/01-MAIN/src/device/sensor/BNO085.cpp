@@ -13,10 +13,13 @@
 #endif
 
 // コンストラクタの実装
-BNO085::BNO085( TwoWire *wire, HardwareSerial *debugSerial)
+BNO085::BNO085(TwoWire *wire, HardwareSerial *debugSerial)
 {
     _bno = Adafruit_BNO08x(-1);
+    _wire = wire;
     _debugSerial = debugSerial;
+    _pendingReportSetup = false;
+    _pendingReportSinceMs = 0;
 }
 
 // BNO085の初期化
@@ -24,6 +27,7 @@ bool BNO085::begin()
 {
     direction_offset = 0.0;
     _calibration_status = 0;
+    _pendingReportSetup = false;
 
     // I2C初期化 (begin_I2Cの呼び出しは、コンストラクタで設定したパラメータを使用)
     if (!_bno.begin_I2C())
@@ -32,8 +36,14 @@ bool BNO085::begin()
     }
 
     // レポートの有効化
-    setReports(REPORT_TYPE, REPORT_INTERVAL_US);
-    _debugSerial->println("BNO085 initialized");
+    if (!setReports(REPORT_TYPE, REPORT_INTERVAL_US))
+    {
+        return false;
+    }
+    if (_debugSerial)
+    {
+        _debugSerial->println("BNO085 initialized");
+    }
     return true;
 }
 
@@ -50,10 +60,32 @@ bool BNO085::read()
 {
     sh2_SensorValue_t sensorValue;
 
+    // リセット直後に enableReport() を呼ぶとハングする個体/タイミングがあるため、少し待ってから再設定する
+    if (_pendingReportSetup)
+    {
+        const unsigned long elapsed = millis() - _pendingReportSinceMs;
+        if (elapsed < 200)
+        {
+            return false;
+        }
+        if (!setReports(REPORT_TYPE, REPORT_INTERVAL_US))
+        {
+            _pendingReportSinceMs = millis();
+            return false;
+        }
+        _pendingReportSetup = false;
+    }
+
     if (_bno.wasReset())
     {
-        _debugSerial->print("sensor was reset ");
-        setReports(REPORT_TYPE, REPORT_INTERVAL_US);
+        if (_debugSerial)
+        {
+            _debugSerial->println("sensor was reset");
+        }
+
+        _pendingReportSetup = true;
+        _pendingReportSinceMs = millis();
+        return false;
     }
 
     // センサーイベントの取得
@@ -71,15 +103,22 @@ bool BNO085::read()
     // キャリブレーションステータスを更新
     _calibration_status = sensorValue.status;
 
-    // クォータニオンデータへのポインタを取得
-    sh2_RotationVectorWAcc_t *rotational_vector = &sensorValue.un.arvrStabilizedRV;
-
-    // クォータニオンからオイラー角に変換
+    // REPORT_TYPEに応じて正しいunionフィールドを参照する
+#if (REPORT_TYPE == SH2_GYRO_INTEGRATED_RV)
+    sh2_GyroIntegratedRV_t *rotational_vector = &sensorValue.un.gyroIntegratedRV;
     quaternionToEuler(rotational_vector->real,
                       rotational_vector->i,
                       rotational_vector->j,
                       rotational_vector->k,
-                      &heading, &pitch, &roll, true); // trueで度(degrees)に変換
+                      &heading, &pitch, &roll, true);
+#else
+    sh2_RotationVectorWAcc_t *rotational_vector = &sensorValue.un.arvrStabilizedRV;
+    quaternionToEuler(rotational_vector->real,
+                      rotational_vector->i,
+                      rotational_vector->j,
+                      rotational_vector->k,
+                      &heading, &pitch, &roll, true);
+#endif
 
     // directionの計算 (0-360度の範囲に収める)
     direction = heading - direction_offset;
@@ -105,6 +144,10 @@ void BNO085::setZero()
 // センサー値のシリアル出力
 void BNO085::print()
 {
+    if (!_debugSerial)
+    {
+        return;
+    }
     _debugSerial->print(F("Calib: "));
     _debugSerial->print(_calibration_status);
     _debugSerial->print(F(" Heading: "));
@@ -167,9 +210,25 @@ void BNO085::quaternionToEuler(float qr, float qi, float qj, float qk, float *ya
     }
 }
 
-void BNO085::setReports(sh2_SensorId_t reportType, long report_interval) {
-  Serial.println("Setting desired reports");
-  if (! _bno.enableReport(reportType, report_interval)) {
-    Serial.println("Could not enable stabilized remote vector");
-  }
+bool BNO085::setReports(sh2_SensorId_t reportType, long report_interval)
+{
+    if (_debugSerial)
+    {
+        _debugSerial->println("Setting desired reports");
+    }
+    bool ok = _bno.enableReport(reportType, report_interval);
+    if (_debugSerial)
+    {
+        _debugSerial->print("EnableReport returned: ");
+        _debugSerial->println(ok ? 1 : 0);
+    }
+
+    if (!ok)
+    {
+        if (_debugSerial)
+        {
+            _debugSerial->println("Could not enable report");
+        }
+    }
+    return ok;
 }
