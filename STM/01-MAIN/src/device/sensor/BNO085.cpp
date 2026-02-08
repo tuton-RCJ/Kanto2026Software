@@ -207,6 +207,14 @@ void BNO085::quaternionToEuler(float qr, float qi, float qj, float qk, float *ya
         {
             *yaw += 360.0;
         }
+        if (*pitch < 0.0)
+        {
+            *pitch += 360.0;
+        }
+        if (*roll < 0.0)
+        {
+            *roll += 360.0;
+        }
     }
 }
 

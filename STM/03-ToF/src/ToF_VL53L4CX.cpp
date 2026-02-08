@@ -58,7 +58,6 @@ byte ToF_VL53L4CX::update(HardwareSerial *SerialPort)
         VL53L4CX_MultiRangingData_t *pMultiRangingData = &MultiRangingData;
         uint8_t NewDataReady = 0;
         int no_of_object_found = 0, j;
-        char report[64];
         int status;
 
         // do
@@ -73,49 +72,28 @@ byte ToF_VL53L4CX::update(HardwareSerial *SerialPort)
 
         if ((!status) && (NewDataReady != 0))
         {
-            // SerialPort->print("S");
-            // SerialPort->print("Sensor Number: ");
-            // SerialPort->println(i);
-            // SerialPort->print(" - Time: ");
-            // SerialPort->print(millis());
-            // SerialPort->print(" ms - ");
-
             status = tof_sensors[i].VL53L4CX_GetMultiRangingData(pMultiRangingData);
-            // SerialPort->println(millis());
 
             no_of_object_found = pMultiRangingData->NumberOfObjectsFound;
-            // snprintf(report, sizeof(report), "VL53L4CX Satellite: Count=%d, #Objs=%1d ", pMultiRangingData->StreamCount, no_of_object_found);
-            // SerialPort->print("Sensor Number: ");
-            // SerialPort->print(i);
-            // SerialPort->print(" - ");
-            // SerialPort->print(report);
+            uint16_t min_distance = 0xFFFF;
+            bool has_valid_distance = false;
             for (j = 0; j < no_of_object_found; j++)
             {
-                // if (j != 0)
-                // {
-                //     SerialPort->print("\r\n                               ");
-                // }
-                // SerialPort->print("status=");
-                // SerialPort->print(pMultiRangingData->RangeData[j].RangeStatus);
-                // SerialPort->print(", D=");
-                // SerialPort->print(pMultiRangingData->RangeData[j].RangeMilliMeter);
-                // SerialPort->print("mm");
-                if (pMultiRangingData->RangeData[j].RangeStatus == 0)
+                uint16_t distance = pMultiRangingData->RangeData[j].RangeMilliMeter;
+                if (distance > 80 && distance < min_distance)
                 {
-                    tof_values[i] = pMultiRangingData->RangeData[j].RangeMilliMeter;
+                    min_distance = distance;
+                    has_valid_distance = true;
                 }
-
-                // SerialPort->print(", Signal=");
-                // SerialPort->print((float)pMultiRangingData->RangeData[j].SignalRateRtnMegaCps / 65536.0);
-                // SerialPort->print(" Mcps, Ambient=");
-                // SerialPort->print((float)pMultiRangingData->RangeData[j].AmbientRateRtnMegaCps / 65536.0);
-                // SerialPort->print(" Mcps");
             }
-            if (no_of_object_found == 0 || status != 0)
+            if (no_of_object_found == 0 || status != 0 || !has_valid_distance)
             {
                 tof_values[i] = 8191;
             }
-            // SerialPort->println("");
+            else
+            {
+                tof_values[i] = min_distance;
+            }
             if (status == 0)
             {
                 status = tof_sensors[i].VL53L4CX_ClearInterruptAndStartMeasurement();
@@ -123,5 +101,18 @@ byte ToF_VL53L4CX::update(HardwareSerial *SerialPort)
             value_changed |= (1 << i);
         }
     }
+    // if (value_changed != 0)
+    // {
+    //     SerialPort->print("ToF: ");
+    //     for (int i = 0; i < tof_num; i++)
+    //     {
+    //         SerialPort->print(tof_values[i]);
+    //         if (i < tof_num - 1)
+    //         {
+    //             SerialPort->print(" ");
+    //         }
+    //     }
+    //     SerialPort->println();
+    // }
     return value_changed;
 }
