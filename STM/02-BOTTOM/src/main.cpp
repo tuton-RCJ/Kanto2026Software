@@ -2,7 +2,9 @@
 #include <Adafruit_NeoPixel.h>
 #include "colorsensor.h"
 
-#define PhotoRefPin PA5_ALT0
+// #define PhotoRefPin PA5_ALT0
+#define PhotoRefPin1 PA4_ALT0
+#define PhotoRefPin2 PA6_ALT0
 
 #define CS_RANGE PB5
 #define CS_GATE PB3
@@ -32,9 +34,12 @@ bool verifyCheckDigit(byte data[], int length, byte checkDigit);
 void setup()
 {
   uart1.begin(115200);
-  pinMode(PhotoRefPin, INPUT);
-  pinMode(PA2, OUTPUT);
-  return;
+  // pinMode(PhotoRefPin, INPUT);
+  // pinMode(PA2, OUTPUT);
+  // return;
+
+  pinMode(PhotoRefPin1, INPUT);
+  pinMode(PhotoRefPin2, INPUT);
 
   AFIO->MAPR |= AFIO_MAPR_PD01_REMAP;
   strip.begin();
@@ -61,16 +66,20 @@ void setup()
 
 void loop()
 {
-  uart1.println(analogRead(PhotoRefPin));
-  if (analogRead(PhotoRefPin) < 910)
-  {
-    digitalWrite(PA2, HIGH);
-  }
-  else
-  {
-    digitalWrite(PA2, LOW);
-  }
-  return;
+  // uart1.print(analogRead(PhotoRefPin1));
+  // uart1.print(",");
+  // uart1.println(analogRead(PhotoRefPin2));
+  // return;
+  // uart1.println(analogRead(PhotoRefPin));
+  // if (analogRead(PhotoRefPin) < 910)
+  // {
+  //   digitalWrite(PA2, HIGH);
+  // }
+  // else
+  // {
+  //   digitalWrite(PA2, LOW);
+  // }
+  // return;
   if (millis() - measuringStartTime >= waitTime)
   {
     colorsensor.end();
