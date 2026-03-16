@@ -41,6 +41,7 @@ void ReadToF();
 
 Buzzer buzzer(PB8);
 LED led(PA14, 1);
+LED victimLED(PC15, 20);
 
 const int Servo_L = PC9;
 const int Servo_R = PB9;
@@ -230,7 +231,7 @@ void loop()
     ReadToF();
     buzzer.update();
     // uart1.println("Main Loop End");
-    bno.print();
+    // bno.print();
 }
 
 void checkRPi()
@@ -238,13 +239,13 @@ void checkRPi()
     // uart1.println("Checking RPi Command...");
     if (uart2.available() > 2)
     {
-        uart1.println("Received Command from RPi");
+        // uart1.println("Received Command from RPi");
         byte type = uart2.read();
         byte seq = uart2.read();
-        uart1.print("Command Type: ");
-        uart1.println((int)type);
-        uart1.print("Sequence: ");
-        uart1.println((int)seq);
+        // uart1.print("Command Type: ");
+        // uart1.println((int)type);
+        // uart1.print("Sequence: ");
+        // uart1.println((int)seq);
 
         if (type == 0x00)
         {
