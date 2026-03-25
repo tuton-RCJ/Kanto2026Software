@@ -2,7 +2,12 @@
 LED::LED(int pin, int numPixels) : strip(numPixels, pin, NEO_GRB + NEO_KHZ800)
 {
     strip.begin();
-    strip.show(); // Initialize all pixels to 'off'
+    // Initialize all pixels to 'off'
+    for (int i = 0; i < strip.numPixels(); i++)
+    {
+        strip.setPixelColor(i, strip.Color(0, 0, 0));
+    }
+    strip.show();
 }
 
 void LED::setColor(uint8_t r, uint8_t g, uint8_t b)

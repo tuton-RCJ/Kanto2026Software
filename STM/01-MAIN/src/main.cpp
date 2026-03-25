@@ -41,7 +41,7 @@ void ReadToF();
 
 Buzzer buzzer(PB8);
 LED led(PA14, 1);
-LED led_pc15(PC15, 20);
+TopLED led_pc15(PC15);
 
 const int Servo_L = PC9;
 const int Servo_R = PB9;
@@ -99,6 +99,11 @@ int LEDblinkTestCnt = 0;
 
 void setup()
 {
+    led.setBrightness(20);
+    led.turnOff();
+    led_pc15.setBrightness(20);
+    led_pc15.turnOff();
+
     uart1.begin(115200);
     uart1.println("System Start");
     uart6.begin(115200);
@@ -121,11 +126,6 @@ void setup()
     // delay(50);
     // ssd1306.begin();
     // // ssd1306.runDemo();
-
-    led.setBrightness(20);
-    led.turnOff();
-    led_pc15.setBrightness(20);
-    led_pc15.turnOff();
 
     for (int i = 0; i < 2; i++)
     {
@@ -388,6 +388,7 @@ void checkRPi()
             if (verifyCheckDigit(data, 5, CD))
             {
                 setToFboardLED(r, g, b);
+                led_pc15.setVicimColor(r, g, b);
                 // 返答
                 uart2.write(0x03);       // type
                 uart2.write(seq);        // seq
@@ -422,7 +423,7 @@ void checkRPi()
             byte data[5] = {type, seq, r, g, b};
             if (verifyCheckDigit(data, 5, CD))
             {
-                led_pc15.setColor(r, g, b);
+                led_pc15.setCameraColor(r, g, b);
                 // 返答
                 uart2.write(0x05);       // type
                 uart2.write(seq);        // seq
