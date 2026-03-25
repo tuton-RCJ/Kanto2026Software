@@ -12,6 +12,11 @@ Buzzer buzzer(PB8);
 #define RE_LED_RED PB4
 #define RE_LED_BLUE PB5
 
+#define SW1 PB10
+#define SW2 PB12
+#define SW3 PB13
+#define SW4 PB14
+
 TFT_eSPI tft = TFT_eSPI();
 #define TFT_BL PA8
 void UpdateDisplayCoordinates(byte x, byte y, byte direction);
@@ -30,6 +35,10 @@ void setup()
   pinMode(RE_LED_BLUE, OUTPUT);
   digitalWrite(RE_LED_RED, LOW);
   digitalWrite(RE_LED_BLUE, LOW);
+  pinMode(SW1, INPUT);
+  pinMode(SW2, INPUT);
+  pinMode(SW3, INPUT);
+  pinMode(SW4, INPUT);
 
   // Display setup
   pinMode(TFT_BL, OUTPUT);
@@ -64,11 +73,16 @@ void setup()
 
 void loop()
 {
+
   if (lox.isRangeComplete())
   {
     // uart1.print("Distance in mm: ");
     tof_distance = lox.readRange();
     // uart1.println(lox.readRange());
+  }
+  if (digitalRead(SW1) == LOW)
+  {
+    DrawMessage("ToF: " + String(tof_distance) + " mm");
   }
 
   if (uart1.available() >= 2)
@@ -78,7 +92,7 @@ void loop()
     // 2バイト目：シーケンス番号（0-255）
     byte type = uart1.read();
     byte seq = uart1.read();
-    if (type == 0) // ToFセンサーからのデータ要求
+    if (type == 0) // ToFセンサーのデータ要求
     {
       unsigned long startMillis = millis();
       while (uart1.available() < 1)
@@ -102,10 +116,6 @@ void loop()
           uart1.read(); // バッファクリア
         return;
       }
-      // uart1.println("Check digit error");
-      while (uart1.available())
-        uart1.read(); // バッファクリア
-      return;
 
       uart1.write(type);                                                                 // タイプ
       uart1.write(seq);                                                                  // シーケンス番号
@@ -115,7 +125,7 @@ void loop()
       while (uart1.available())
         uart1.read(); // バッファクリア
     }
-    if (type == 1)
+    else if (type == 1)
     {
       unsigned long startMillis = millis();
       while (uart1.available() < 4)
@@ -153,7 +163,7 @@ void loop()
       uart1.write(seq);        // シーケンス番号
       uart1.write(type ^ seq); // X座標
     }
-    if (type == 2)
+    else if (type == 2)
     {
       unsigned long startMillis = millis();
       while (uart1.available() < 1)
@@ -214,6 +224,93 @@ void loop()
       uart1.write(type);       // タイプ
       uart1.write(seq);        // シーケンス番号
       uart1.write(type ^ seq); // チェックディジット
+    }
+    else if (type == 3)
+    {
+      // Buzzer Control Command
+      unsigned long startTime = millis();
+      while (uart1.available() < 1)
+      {
+        if (millis() - startTime > 100)
+        {
+          DrawErrorMessage("Timeout - music length");
+          while (uart1.available())
+          {
+            uart1.read();
+          }
+          return;
+        }
+      }
+      byte musicLength = uart1.read();
+      constexpr int MAX_MUSIC_LEN = 300;
+      NoteMillis notes[MAX_MUSIC_LEN];
+      int effectiveLength = (int)musicLength;
+      if (effectiveLength > MAX_MUSIC_LEN)
+      {
+        effectiveLength = MAX_MUSIC_LEN;
+      }
+
+      byte CD = 0x04 ^ seq ^ musicLength;
+      for (int i = 0; i < musicLength; i++)
+      {
+        unsigned long noteStart = millis();
+        while (uart1.available() < 4)
+        {
+          if (millis() - noteStart > 200)
+          {
+            DrawErrorMessage("Timeout - note data");
+            while (uart1.available())
+            {
+              uart1.read();
+            }
+            return;
+          }
+        }
+        byte note_h = uart1.read();
+        byte note_l = uart1.read();
+        byte dur_h = uart1.read();
+        byte dur_l = uart1.read();
+        if (i < effectiveLength)
+        {
+          notes[i].note = ((int)note_h << 8) | (int)note_l;
+          notes[i].duration = ((int)dur_h << 8) | (int)dur_l;
+        }
+        CD ^= note_h ^ note_l ^ dur_h ^ dur_l;
+      }
+      unsigned long cdStart = millis();
+      while (uart1.available() < 1)
+      {
+        if (millis() - cdStart > 200)
+        {
+          DrawErrorMessage("Timeout - check digit");
+          while (uart1.available())
+          {
+            uart1.read();
+          }
+          return;
+        }
+      }
+      byte receivedCD = uart1.read();
+      if (CD == receivedCD)
+      {
+        DrawMessage("CheckDigit OK!");
+        if (effectiveLength <= 0)
+        {
+          buzzer.mute();
+        }
+        else
+        {
+          buzzer.RegisterMusic(notes, effectiveLength);
+        }
+        // 返答
+        uart1.write(type);       // type
+        uart1.write(seq);        // seq
+        uart1.write(type ^ seq); // CD
+      }
+      else
+      {
+        DrawErrorMessage("CheckDigit Error!");
+      }
     }
     else
     {
