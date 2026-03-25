@@ -41,7 +41,7 @@ void ReadToF();
 
 Buzzer buzzer(PB8);
 LED led(PA14, 1);
-LED victimLED(PC15, 20);
+LED led_pc15(PC15, 20);
 
 const int Servo_L = PC9;
 const int Servo_R = PB9;
@@ -124,6 +124,8 @@ void setup()
 
     led.setBrightness(20);
     led.turnOff();
+    led_pc15.setBrightness(20);
+    led_pc15.turnOff();
 
     for (int i = 0; i < 2; i++)
     {
@@ -369,7 +371,7 @@ void checkRPi()
             {
                 if (millis() - startTime > 100)
                 {
-                    uart1.println("Timeout waiting for LED command");
+                    uart1.println("Timeout waiting for ToF LED command");
                     while (uart2.available())
                     {
                         uart2.read();
@@ -377,7 +379,7 @@ void checkRPi()
                     return;
                 }
             }
-            // LED制御命令
+            // ToF LED制御命令
             byte r = uart2.read();
             byte g = uart2.read();
             byte b = uart2.read();
@@ -394,6 +396,40 @@ void checkRPi()
             else
             {
 
+                uart1.println("CheckDigit Error!");
+            }
+        }
+        else if (type == 5)
+        {
+            unsigned long startTime = millis();
+            while (uart2.available() < 4)
+            {
+                if (millis() - startTime > 100)
+                {
+                    uart1.println("Timeout waiting for PC15 LED command");
+                    while (uart2.available())
+                    {
+                        uart2.read();
+                    }
+                    return;
+                }
+            }
+            // PC15 LED制御命令
+            byte r = uart2.read();
+            byte g = uart2.read();
+            byte b = uart2.read();
+            byte CD = uart2.read();
+            byte data[5] = {type, seq, r, g, b};
+            if (verifyCheckDigit(data, 5, CD))
+            {
+                led_pc15.setColor(r, g, b);
+                // 返答
+                uart2.write(0x05);       // type
+                uart2.write(seq);        // seq
+                uart2.write(0x05 ^ seq); // CD
+            }
+            else
+            {
                 uart1.println("CheckDigit Error!");
             }
         }

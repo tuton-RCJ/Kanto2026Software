@@ -5,55 +5,71 @@ from machine import UART
 import ustruct
 from fpioa_manager import fm
 
+# ====== Tunables for max FPS ======
+USE_DOUBLE_BUF = True
+
+DEBUG_EVERY = 1      # 0 = no prints
+GC_EVERY = 30        # collect every N frames
+COLOR_EVERY = 1      # run color detect every N frames (1 = every frame)
+
+MIN_CONF = 0.9
+CHAR_CONSISTENT = 3  # 1 = no debounce (fastest)
+
+COLOR_STRIDE = 8
+COLOR_PIXELS_THR = 200
+
+# ================================
+
 last_character_label = None
 last_color_label = None
 character_count = 0
 color_count = 0
-min_confidence = 0.9
-thre_green = [(20,100, -50, -20, -10, 20)]
-thre_red = [(50, 100
-, 60, 85, 50, 80)]
-thre_yellow = [(50, 100, -40, -15, 50, 80)]
-task = None
 
-fm.register(35, fm.fpioa.UART1_TX, force=True)
-fm.register(34, fm.fpioa.UART1_RX, force=True)
-
-uart = UART(UART.UART1, 115200,8, None, 1, timeout=1000, read_buf_len=4096)
+thre_green = [(20,70, -40, -20, 5, 20)]
+thre_red = [(30, 60, 55, 80, 40, 70)]
+thre_yellow = [(35, 100, 0, 30, 50, 75)]
 
 labels = ("H", "None", "S", "U")
-sensor_window=(96, 16, 224, 224)
-
-# UART codes (1 byte)
 CHAR_CODES = {"U": 1, "S": 2, "H": 3}
 COLOR_CODES = {"G": 4, "Y": 5, "R": 6}
 
-
+fm.register(35, fm.fpioa.UART1_TX, force=True)
+fm.register(34, fm.fpioa.UART1_RX, force=True)
+uart = UART(UART.UART1, 115200, 8, None, 1, timeout=1000, read_buf_len=4096)
 
 gc.enable()
 gc.threshold(gc.mem_alloc() + gc.mem_free())
 
+
 def send(data):
-    uart.write(ustruct.pack("B", data))
+    uart.write(ustruct.pack("B", data & 0xFF))
 
-def detect_character_victim(img):
-    global last_character_label
-    global character_count
-    global task
 
-    fmap = kpu.forward(task, img)
-    plist=fmap[:]
-    pmax=max(plist)
-    max_index=plist.index(pmax)
-    label = labels[max_index].strip()
-    img.draw_string(0,0, "%.2f : %s" %(pmax, label), scale=2, color=(0, 0, 0))
-    #print(label)
-    if pmax <= min_confidence:
-        last_character_label = None
-        character_count = 0
+def snap():
+    try:
+        return sensor.snapshot()
+    except RuntimeError:
         return None
 
-    if label == "None":
+def detect_character_victim_from_fmap(fmap):
+    global last_character_label, character_count
+
+    v0 = fmap[0]
+    v1 = fmap[1]
+    v2 = fmap[2]
+    v3 = fmap[3]
+
+    pmax = v0
+    max_index = 0
+    if v1 > pmax:
+        pmax = v1; max_index = 1
+    if v2 > pmax:
+        pmax = v2; max_index = 2
+    if v3 > pmax:
+        pmax = v3; max_index = 3
+
+    label = labels[max_index].strip()
+    if pmax <= MIN_CONF or label == "None":
         last_character_label = None
         character_count = 0
         return 0
@@ -64,82 +80,106 @@ def detect_character_victim(img):
         last_character_label = label
         character_count = 1
 
-    # Debounce: require 3 consecutive frames
-    if character_count == 1:
-        character_count = 0
+    if character_count >= CHAR_CONSISTENT:
+        character_count = CHAR_CONSISTENT - 1 if CHAR_CONSISTENT > 1 else 0
         return CHAR_CODES[label]
     return 0
 
+
 def detect_colored_victim(img):
-    global last_color_label
-    global color_count
-    if img.find_blobs(thre_red, pixels_threshold=100, merge=True):
-        if last_color_label == "R":
-            color_count += 1
-        else:
-            last_color_label = "R"
-            color_count = 1
-        if color_count == 3:
-            color_count = 2
-            return COLOR_CODES["R"]
-        return 0
-    elif img.find_blobs(thre_green, pixels_threshold=100 , merge=True):
-        if last_color_label == "G":
-            color_count += 1
-        else:
-            last_color_label = "G"
-            color_count = 1
-        if color_count == 3:
-            color_count = 2
-            return COLOR_CODES["G"]
-        return 0
-    elif img.find_blobs(thre_yellow, pixels_threshold=100, merge=True):
-        if last_color_label == "Y":
-            color_count += 1
-        else:
-            last_color_label = "Y"
-            color_count = 1
-        if color_count == 3:
-            color_count = 2
-            return COLOR_CODES["Y"]
-        return 0
-    else:
-        last_color_label = None
-        color_count = 0
-        return None
+    global last_color_label, color_count
+
+    blobs = img.find_blobs(
+        thre_red + thre_green + thre_yellow,
+        pixels_threshold=COLOR_PIXELS_THR,
+        merge=True,
+        x_stride=COLOR_STRIDE,
+        y_stride=COLOR_STRIDE
+    )
+    if blobs:
+        found_code = 0
+        for b in blobs:
+            found_code |= b.code()
+
+        label = None
+        if found_code & 0x01:
+            label = "R"
+        elif found_code & 0x02:
+            label = "G"
+        elif found_code & 0x04:
+            label = "Y"
+
+        if label is not None:
+            if last_color_label == label:
+                color_count += 1
+            else:
+                last_color_label = label
+                color_count = 1
+
+            if color_count >= 3:
+                color_count = 0
+                return COLOR_CODES[label]
+            return 0
+
+    last_color_label = None
+    color_count = 0
+    return 0
+
 
 def main(model_addr=0x300000):
-    sensor.reset()
+    sensor.reset(dual_buff=False)
     sensor.set_pixformat(sensor.RGB565)
-    sensor.set_framesize(sensor.QVGA)
-    sensor.set_auto_exposure(False,16533)
-    sensor.set_auto_gain(False, 80)
-    sensor.set_auto_whitebal(False, (87, 64, 110))
-    sensor.set_windowing((0,8, 224, 224))
-    sensor.skip_frames(time = 2000)
-    global task
-    task = kpu.load(model_addr)
+    sensor.set_framesize(sensor.QQVGA)
+    sensor.set_auto_whitebal(False, (76.0, 64.0, 101.0))
+    sensor.set_auto_gain(False, gain_db=20)
+    sensor.set_auto_exposure(False, exposure_us=8000)
+    sensor.set_windowing((0, 0, 112, 112))
+    sensor.skip_frames(time=2000)
 
+    task = kpu.load(model_addr)
+    clock = time.clock()
+
+    img = snap()
+    if img is None:
+        return
+
+    kpu.forward_async(task, img)
+
+    frame_i = 0
     try:
-        while(True):
-            img = sensor.snapshot()
-            if img is None or task is None:
-                continue
-            col = detect_colored_victim(img)
-            ch = detect_character_victim(img)
+        while True:
+            clock.tick()
+            frame_i += 1
+
+            col = 0
+            if COLOR_EVERY > 0 and (frame_i % COLOR_EVERY) == 0:
+                col = detect_colored_victim(img)
+
+            kpu.wait_done()
+            next_img = snap()
+
+
+            fmap = kpu.get_output(task, 0)
+            ch = detect_character_victim_from_fmap(fmap)
+
             if ch:
                 send(ch)
-                print(ch)
             elif col:
                 send(col)
-                print(col)
             else:
                 send(0)
-                print(0)
-            gc.collect()
-    except Exception as e:
-        print(e)
-        raise e
+
+            if next_img is not None:
+                img = next_img
+
+            kpu.forward_async(task, img)
+
+            if DEBUG_EVERY > 0 and (frame_i % DEBUG_EVERY) == 0:
+                print(clock.fps(),ch,col)
+
+            if GC_EVERY > 0 and (frame_i % GC_EVERY) == 0:
+                gc.collect()
+
     finally:
         kpu.deinit(task)
 
