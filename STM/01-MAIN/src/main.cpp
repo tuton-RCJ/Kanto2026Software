@@ -181,8 +181,10 @@ void loop()
             if (LEDblinkTestCnt == 3)
             {
                 setToFboardLED(255, 255, 255);
+                led_pc15.setVicimColor(255, 255, 255);
                 delay(1000);
                 setToFboardLED(0, 0, 0);
+                led_pc15.setVicimColor(0, 0, 0);
                 delay(1000);
             }
             else
@@ -190,17 +192,21 @@ void loop()
                 if (LEDblinkTestCnt == 0)
                 {
                     setToFboardLED(0, 0, 255);
+                    led_pc15.setVicimColor(0, 0, 255);
                 }
                 else if (LEDblinkTestCnt == 1)
                 {
                     setToFboardLED(255, 255, 0);
+                    led_pc15.setVicimColor(255, 255, 0);
                 }
                 else if (LEDblinkTestCnt == 2)
                 {
                     setToFboardLED(255, 0, 0);
+                    led_pc15.setVicimColor(255, 0, 0);
                 }
                 delay(500);
                 setToFboardLED(0, 0, 0);
+                led_pc15.setVicimColor(0, 0, 0);
                 delay(500);
             }
         }
