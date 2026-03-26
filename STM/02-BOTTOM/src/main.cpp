@@ -70,7 +70,6 @@ void loop()
   // uart1.print(",");
   // uart1.println(analogRead(PhotoRefPin2));
   // return;
-  // uart1.println(analogRead(PhotoRefPin));
   // if (analogRead(PhotoRefPin) < 910)
   // {
   //   digitalWrite(PA2, HIGH);
@@ -101,6 +100,12 @@ void loop()
   // uart2.print(colorsensor.color[1]);
   // uart2.print(",");
   // uart2.println(colorsensor.color[2]);
+  // uart1.print("R: ");
+  // uart1.print(sensorData[0]);
+  // uart1.print(" G: ");
+  // uart1.print(sensorData[1]);
+  // uart1.print(" B: ");
+  // uart1.println(sensorData[2]);
 }
 
 void checkRPi()
