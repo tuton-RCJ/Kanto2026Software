@@ -41,7 +41,7 @@ void ReadToF();
 
 Buzzer buzzer(PB8);
 LED led(PA14, 1);
-TopLED led_pc15(PC15);
+// TopLED led_pc15(PC15);
 
 const int Servo_L = PC9;
 const int Servo_R = PB9;
@@ -101,8 +101,8 @@ void setup()
 {
     led.setBrightness(20);
     led.turnOff();
-    led_pc15.setBrightness(20);
-    led_pc15.turnOff();
+    // led_pc15.setBrightness(20);
+    // led_pc15.turnOff();
 
     uart1.begin(115200);
     uart1.println("System Start");
@@ -172,6 +172,7 @@ void setToFboardLED(byte r, byte g, byte b)
 unsigned long previousMillis = 0;
 void loop()
 {
+    uart1.println(millis());
     // uart1.println("SW1: " + String(digitalRead(SWpin[0])) + " SW2: " + String(digitalRead(SWpin[1])));
     // return;
     if (digitalRead(SWpin[1]) == HIGH && digitalRead(SWpin[0]) == LOW)
@@ -181,10 +182,10 @@ void loop()
             if (LEDblinkTestCnt == 3)
             {
                 setToFboardLED(255, 255, 255);
-                led_pc15.setVicimColor(255, 255, 255);
+                // led_pc15.setVicimColor(255, 255, 255);
                 delay(1000);
                 setToFboardLED(0, 0, 0);
-                led_pc15.setVicimColor(0, 0, 0);
+                // led_pc15.setVicimColor(0, 0, 0);
                 delay(1000);
             }
             else
@@ -192,21 +193,21 @@ void loop()
                 if (LEDblinkTestCnt == 0)
                 {
                     setToFboardLED(0, 0, 255);
-                    led_pc15.setVicimColor(0, 0, 255);
+                    // led_pc15.setVicimColor(0, 0, 255);
                 }
                 else if (LEDblinkTestCnt == 1)
                 {
                     setToFboardLED(255, 255, 0);
-                    led_pc15.setVicimColor(255, 255, 0);
+                    // led_pc15.setVicimColor(255, 255, 0);
                 }
                 else if (LEDblinkTestCnt == 2)
                 {
                     setToFboardLED(255, 0, 0);
-                    led_pc15.setVicimColor(255, 0, 0);
+                    // led_pc15.setVicimColor(255, 0, 0);
                 }
                 delay(500);
                 setToFboardLED(0, 0, 0);
-                led_pc15.setVicimColor(0, 0, 0);
+                // led_pc15.setVicimColor(0, 0, 0);
                 delay(500);
             }
         }
@@ -221,6 +222,7 @@ void loop()
     // delay(500);
     // return;
     checkRPi();
+    // return;
     MoveServo();
     ReadUnitV();
     checkRPi();
@@ -236,7 +238,7 @@ void loop()
     checkRPi();
     // return;
     MoveServo();
-    ReadToF();
+    // ReadToF();
     buzzer.update();
     // uart1.println("Main Loop End");
     // bno.print();
@@ -316,6 +318,11 @@ void checkRPi()
                 uart2.write(0x01);       // type
                 uart2.write(seq);        // seq
                 uart2.write(0x01 ^ seq); // CD
+                // uart1.print(0x01);
+                // uart1.print(" ");
+                // uart1.print(seq);
+                // uart1.print(" ");
+                // uart1.println(0x01 ^ seq);
             }
             else
             {
@@ -394,7 +401,7 @@ void checkRPi()
             if (verifyCheckDigit(data, 5, CD))
             {
                 setToFboardLED(r, g, b);
-                led_pc15.setVicimColor(r, g, b);
+                // led_pc15.setVicimColor(r, g, b);
                 // 返答
                 uart2.write(0x03);       // type
                 uart2.write(seq);        // seq
@@ -429,7 +436,7 @@ void checkRPi()
             byte data[5] = {type, seq, r, g, b};
             if (verifyCheckDigit(data, 5, CD))
             {
-                led_pc15.setCameraColor(r, g, b);
+                // led_pc15.setCameraColor(r, g, b);
                 // 返答
                 uart2.write(0x05);       // type
                 uart2.write(seq);        // seq
@@ -828,6 +835,10 @@ void ReadToF()
                     sensorData[13 + i] = 0;
                 }
                 uart1.println("checksum Error");
+                while (uart6.available())
+                {
+                    uart6.read();
+                }
             }
             prevByte = 0x00;
         }
