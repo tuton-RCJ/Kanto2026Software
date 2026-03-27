@@ -2,6 +2,7 @@
 #include "Adafruit_VL53L0X.h"
 #include <SPI.h>
 #include <Wire.h>
+#include "Adafruit_NeoPixel.h"
 
 #include "buzzer.h"
 #include "TFT_eSPI.h"
@@ -26,6 +27,8 @@ Adafruit_VL53L0X lox = Adafruit_VL53L0X();
 uint16_t tof_distance;
 
 bool verifyCheckDigit(byte data[], int length, byte checkDigit);
+
+Adafruit_NeoPixel pixels(20, PB5, NEO_GRB + NEO_KHZ800);
 
 void setup()
 {
@@ -69,6 +72,13 @@ void setup()
 
   UpdateDisplayCoordinates(0, 0, 0);
   DrawMessage("System Initialized");
+  pixels.begin();
+  pixels.setBrightness(20);
+  for (int i = 0; i < 20; i++)
+  {
+    pixels.setPixelColor(i, pixels.Color(0, 0, 0)); // 　オフ
+  }
+  pixels.show();
 }
 
 void loop()
@@ -311,6 +321,89 @@ void loop()
       {
         DrawErrorMessage("CheckDigit Error!");
       }
+    }
+    else if (type == 4)
+    {
+      // Cam LED Control Command
+      unsigned long startMillis = millis();
+      while (uart1.available() < 4)
+      {
+        if (millis() - startMillis > 3000)
+        { // タイムアウト3000ms
+          DrawErrorMessage("Timeout - check digit");
+          return;
+        }
+      }
+      byte red = uart1.read();
+      byte green = uart1.read();
+      byte blue = uart1.read();
+      byte checkdigit = uart1.read();
+      byte data[3];
+      data[0] = red;
+      data[1] = green;
+      data[2] = blue;
+      if (!verifyCheckDigit(data, 3, checkdigit))
+      {
+        // チェックディジットエラー
+        DrawErrorMessage("Check digit error");
+        while (uart1.available())
+          uart1.read(); // バッファクリア
+        return;
+      }
+      for (int i = 0; i < 5; i++)
+      {
+        pixels.setPixelColor(i, pixels.Color(red, green, blue));
+      }
+      for (int i = 15; i < 20; i++)
+      {
+        pixels.setPixelColor(i, pixels.Color(red, green, blue));
+      }
+      pixels.show();
+
+      // 返答
+      uart1.write(type);       // type
+      uart1.write(seq);        // seq
+      uart1.write(type ^ seq); // CD
+    }
+    else if (type == 5)
+    {
+      // Victim LED Control Command
+      // Cam LED Control Command
+      unsigned long startMillis = millis();
+      while (uart1.available() < 4)
+      {
+        if (millis() - startMillis > 3000)
+        { // タイムアウト3000ms
+          DrawErrorMessage("Timeout - check digit");
+          return;
+        }
+      }
+      byte red = uart1.read();
+      byte green = uart1.read();
+      byte blue = uart1.read();
+      byte checkdigit = uart1.read();
+      byte data[3];
+      data[0] = red;
+      data[1] = green;
+      data[2] = blue;
+      if (!verifyCheckDigit(data, 3, checkdigit))
+      {
+        // チェックディジットエラー
+        DrawErrorMessage("Check digit error");
+        while (uart1.available())
+          uart1.read(); // バッファクリア
+        return;
+      }
+      for (int i = 5; i < 15; i++)
+      {
+        pixels.setPixelColor(i, pixels.Color(red, green, blue));
+      }
+      pixels.show();
+
+      // 返答
+      uart1.write(type);       // type
+      uart1.write(seq);        // seq
+      uart1.write(type ^ seq); // CD
     }
     else
     {

@@ -66,10 +66,10 @@ void setup()
 
 void loop()
 {
-  // uart1.print(analogRead(PhotoRefPin1));
-  // uart1.print(",");
-  // uart1.println(analogRead(PhotoRefPin2));
-  // return;
+  uart1.print(analogRead(PhotoRefPin1));
+  uart1.print(",");
+  uart1.println(analogRead(PhotoRefPin2));
+  return;
   // if (analogRead(PhotoRefPin) < 910)
   // {
   //   digitalWrite(PA2, HIGH);
