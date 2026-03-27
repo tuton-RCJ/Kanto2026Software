@@ -73,11 +73,16 @@ void setup()
   UpdateDisplayCoordinates(0, 0, 0);
   DrawMessage("System Initialized");
   pixels.begin();
-  pixels.setBrightness(20);
+  pixels.setBrightness(50);
   for (int i = 0; i < 20; i++)
   {
-    pixels.setPixelColor(i, pixels.Color(0, 0, 0)); // 　オフ
+    pixels.setPixelColor(i, pixels.Color(0, 0, 0));      // 　オフ
   }
+  // pixels.setBrightness(20);
+  // for (int i = 5; i < 15; i++)
+  // {
+  //   pixels.setPixelColor(i, pixels.Color(255, 255, 255)); // 　オフ
+  // }
   pixels.show();
 }
 
@@ -338,11 +343,13 @@ void loop()
       byte green = uart1.read();
       byte blue = uart1.read();
       byte checkdigit = uart1.read();
-      byte data[3];
-      data[0] = red;
-      data[1] = green;
-      data[2] = blue;
-      if (!verifyCheckDigit(data, 3, checkdigit))
+      byte data[5];
+      data[0] = type;
+      data[1] = seq;
+      data[2] = red;
+      data[3] = green;
+      data[4] = blue;
+      if (!verifyCheckDigit(data, 5, checkdigit))
       {
         // チェックディジットエラー
         DrawErrorMessage("Check digit error");
@@ -382,11 +389,13 @@ void loop()
       byte green = uart1.read();
       byte blue = uart1.read();
       byte checkdigit = uart1.read();
-      byte data[3];
-      data[0] = red;
-      data[1] = green;
-      data[2] = blue;
-      if (!verifyCheckDigit(data, 3, checkdigit))
+      byte data[5];
+      data[0] = type;
+      data[1] = seq;
+      data[2] = red;
+      data[3] = green;
+      data[4] = blue;
+      if (!verifyCheckDigit(data, 5, checkdigit))
       {
         // チェックディジットエラー
         DrawErrorMessage("Check digit error");
