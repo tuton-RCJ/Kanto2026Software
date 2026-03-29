@@ -172,53 +172,53 @@ void setToFboardLED(byte r, byte g, byte b)
 unsigned long previousMillis = 0;
 void loop()
 {
-    uart1.println(millis());
+    // uart1.println(millis());
     // uart1.println("SW1: " + String(digitalRead(SWpin[0])) + " SW2: " + String(digitalRead(SWpin[1])));
     // return;
-    if (digitalRead(SWpin[1]) == HIGH && digitalRead(SWpin[0]) == LOW)
-    {
-        for (int i = 0; i < 5; i++)
-        {
-            if (LEDblinkTestCnt == 3)
-            {
-                setToFboardLED(255, 255, 255);
-                // led_pc15.setVicimColor(255, 255, 255);
-                delay(1000);
-                setToFboardLED(0, 0, 0);
-                // led_pc15.setVicimColor(0, 0, 0);
-                delay(1000);
-            }
-            else
-            {
-                if (LEDblinkTestCnt == 0)
-                {
-                    setToFboardLED(0, 0, 255);
-                    // led_pc15.setVicimColor(0, 0, 255);
-                }
-                else if (LEDblinkTestCnt == 1)
-                {
-                    setToFboardLED(255, 255, 0);
-                    // led_pc15.setVicimColor(255, 255, 0);
-                }
-                else if (LEDblinkTestCnt == 2)
-                {
-                    setToFboardLED(255, 0, 0);
-                    // led_pc15.setVicimColor(255, 0, 0);
-                }
-                delay(500);
-                setToFboardLED(0, 0, 0);
-                // led_pc15.setVicimColor(0, 0, 0);
-                delay(500);
-            }
-        }
-        LEDblinkTestCnt = (LEDblinkTestCnt + 1) % 4;
-    }
+    // if (digitalRead(SWpin[1]) == HIGH && digitalRead(SWpin[0]) == LOW)
+    // {
+    //     for (int i = 0; i < 5; i++)
+    //     {
+    //         if (LEDblinkTestCnt == 3)
+    //         {
+    //             setToFboardLED(255, 255, 255);
+    //             // led_pc15.setVicimColor(255, 255, 255);
+    //             delay(1000);
+    //             setToFboardLED(0, 0, 0);
+    //             // led_pc15.setVicimColor(0, 0, 0);
+    //             delay(1000);
+    //         }
+    //         else
+    //         {
+    //             if (LEDblinkTestCnt == 0)
+    //             {
+    //                 setToFboardLED(0, 0, 255);
+    //                 // led_pc15.setVicimColor(0, 0, 255);
+    //             }
+    //             else if (LEDblinkTestCnt == 1)
+    //             {
+    //                 setToFboardLED(255, 255, 0);
+    //                 // led_pc15.setVicimColor(255, 255, 0);
+    //             }
+    //             else if (LEDblinkTestCnt == 2)
+    //             {
+    //                 setToFboardLED(255, 0, 0);
+    //                 // led_pc15.setVicimColor(255, 0, 0);
+    //             }
+    //             delay(500);
+    //             setToFboardLED(0, 0, 0);
+    //             // led_pc15.setVicimColor(0, 0, 0);
+    //             delay(500);
+    //         }
+    //     }
+    //     LEDblinkTestCnt = (LEDblinkTestCnt + 1) % 4;
+    // }
     // buzzer.Shougatu();
     // return;
     // uart1.println("Main Loop Start");
     // servo_R.write(180);
     // delay(500);
-    // servo_R.write(60);
+    // servo_R.write(60);　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　ｖｃｖｃｃ
     // delay(500);
     // return;
     checkRPi();
@@ -238,10 +238,10 @@ void loop()
     checkRPi();
     // return;
     MoveServo();
-    // ReadToF();
+    ReadToF();
     buzzer.update();
     // uart1.println("Main Loop End");
-    // bno.print();
+    bno.print();
 }
 
 void checkRPi()
