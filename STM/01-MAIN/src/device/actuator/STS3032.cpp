@@ -35,7 +35,7 @@ void STS3032::LeftDrive(int SpeedPercent, int acceleration)
 
     int _SpeedPercent = constrain(SpeedPercent, -100, 100);
     int speed = _SpeedPercent * _maxSpeed / 100;
-    speed = -speed;
+    
     if (isDisabled)
         speed = 0;
     for (int i = 0; i < 5; i++)
@@ -49,7 +49,7 @@ void STS3032::RightDrive(int SpeedPercent, int acceleration)
 {
     int _SpeedPercent = constrain(SpeedPercent, -100, 100);
     int speed = _SpeedPercent * _maxSpeed / 100;
-
+    speed = -speed;
     if (isDisabled)
         speed = 0;
     for (int i = 0; i < 5; i++)
