@@ -80,7 +80,7 @@ byte ToF_VL53L4CX::update(HardwareSerial *SerialPort)
             for (j = 0; j < no_of_object_found; j++)
             {
                 uint16_t distance = pMultiRangingData->RangeData[j].RangeMilliMeter;
-                if (distance > 80 && distance < min_distance)
+                if (distance > 40 && distance < min_distance)
                 {
                     min_distance = distance;
                     has_valid_distance = true;
