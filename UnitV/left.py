@@ -5,33 +5,45 @@ from machine import UART
 import ustruct
 from fpioa_manager import fm
 
-# ====== Tunables for max FPS ======
-USE_DOUBLE_BUF = True
+USE_DOUBLE_BUF = False
 
-DEBUG_EVERY = 1      # 0 = no prints
-GC_EVERY = 30        # collect every N frames
-COLOR_EVERY = 1      # run color detect every N frames (1 = every frame)
+DEBUG_EVERY = 1      
+GC_EVERY = 30       
+COLOR_EVERY = 1   
 
-MIN_CONF = 0.9
-CHAR_CONSISTENT = 3  # 1 = no debounce (fastest)
+MIN_CONF = 0.7
+CHAR_CONSISTENT = 3  
+CHAR_BINARY_THRESHOLD = 60
 
-COLOR_STRIDE = 8
-COLOR_PIXELS_THR = 200
+COLOR_PIXELS_THR = 120
+COLOR_AREA_THR = 120
+COLOR_HISTORY_N = 2
 
-# ================================
 
 last_character_label = None
-last_color_label = None
 character_count = 0
-color_count = 0
 
-thre_green = [(20,70, -40, -20, 5, 20)]
-thre_red = [(30, 60, 55, 80, 40, 70)]
-thre_yellow = [(35, 100, 0, 30, 50, 75)]
+COLOR_NAMES = ("Black", "Red", "Yellow", "Green", "Blue")
+COLOR_TARGETS = (
+    (40, 40, 40),
+    (200, 50, 50),
+    (200, 200, 50),
+    (10, 90, 60),
+    (50, 80, 200),
+)
 
-labels = ("H", "None", "S", "U")
-CHAR_CODES = {"U": 1, "S": 2, "H": 3}
-COLOR_CODES = {"G": 4, "Y": 5, "R": 6}
+DETECT_LAB_THRESHOLDS = [
+    (0, 20, -30, 30, -50, 50),      # Black
+    (20, 80, 30, 80, 30, 70),       # Red
+    (30, 100, -40, 40, 40, 90),     # Yellow
+    (10, 60, -60, -20, 0, 50),      # Green
+    (30, 70, 10, 40, -100, -50),    # Blue
+]
+
+labels = ("Omega", "Psi", "Phi", "Other")
+CHAR_CODES = {"Omega": 1, "Psi": 2, "Phi": 3}
+
+color_history = []
 
 fm.register(35, fm.fpioa.UART1_TX, force=True)
 fm.register(34, fm.fpioa.UART1_RX, force=True)
@@ -51,6 +63,12 @@ def snap():
     except RuntimeError:
         return None
 
+
+def preprocess_character_image(img):
+    img.to_grayscale()
+    img.binary([(CHAR_BINARY_THRESHOLD, 255)])
+    return img
+
 def detect_character_victim_from_fmap(fmap):
     global last_character_label, character_count
 
@@ -69,7 +87,7 @@ def detect_character_victim_from_fmap(fmap):
         pmax = v3; max_index = 3
 
     label = labels[max_index].strip()
-    if pmax <= MIN_CONF or label == "None":
+    if pmax <= MIN_CONF or label == "Other":
         last_character_label = None
         character_count = 0
         return 0
@@ -86,64 +104,113 @@ def detect_character_victim_from_fmap(fmap):
     return 0
 
 
+def push_color_history(layers, conf):
+    color_history.append((tuple(layers), conf))
+    if len(color_history) > COLOR_HISTORY_N:
+        color_history.pop(0)
+
+
+def get_stable_color_layers():
+    if len(color_history) <= 0:
+        return None, 0.0
+
+    stable = []
+    layer_confs = []
+
+    for layer_i in range(5):
+        votes = [0.0, 0.0, 0.0, 0.0, 0.0]
+        total = 0.0
+
+        for layers, conf in color_history:
+            votes[layers[layer_i]] += conf
+            total += conf
+
+        if total <= 0.0:
+            return None, 0.0
+
+        best = 0
+        for i in range(1, 5):
+            if votes[i] > votes[best]:
+                best = i
+
+        stable.append(best)
+        layer_confs.append(votes[best] / total)
+
+    min_conf = layer_confs[0]
+    for c in layer_confs:
+        if c < min_conf:
+            min_conf = c
+
+    return stable, min_conf
+
+
 def detect_colored_victim(img):
-    global last_color_label, color_count
-
     blobs = img.find_blobs(
-        thre_red + thre_green + thre_yellow,
+        DETECT_LAB_THRESHOLDS,
         pixels_threshold=COLOR_PIXELS_THR,
+        area_threshold=COLOR_AREA_THR,
         merge=True,
-        x_stride=COLOR_STRIDE,
-        y_stride=COLOR_STRIDE
+        margin=5,
     )
-    if blobs:
-        found_code = 0
-        for b in blobs:
-            found_code |= b.code()
 
-        label = None
-        if found_code & 0x01:
-            label = "R"
-        elif found_code & 0x02:
-            label = "G"
-        elif found_code & 0x04:
-            label = "Y"
+    if not blobs:
+        return 0
 
-        if label is not None:
-            if last_color_label == label:
-                color_count += 1
-            else:
-                last_color_label = label
-                color_count = 1
+    target = max(blobs, key=lambda b: b.pixels())
+    x, y, w, h = target.rect()
+    if w < 20 or h < 20:
+        return 0
 
-            if color_count >= 3:
-                color_count = 0
-                return COLOR_CODES[label]
-            return 0
+    result = img.estimate_concentric_score(
+        target.cx(),
+        target.cy(),
+        float(w) * 0.5,
+        float(h) * 0.5,
+        targets=COLOR_TARGETS,
+    )
+    if not result:
+        return 0
 
-    last_color_label = None
-    color_count = 0
-    return 0
+    score, layers, final_conf, center_layers, center_conf, width_layers, width_conf = result
+    push_color_history(layers, final_conf)
+
+    stable_layers, stable_conf = get_stable_color_layers()
+    if not stable_layers:
+        return 0
+
+    stable_score = 0
+    for c in stable_layers:
+        stable_score += (-2, -1, 0, 1, 2)[c]
+
+    if stable_score < 0 or stable_score >= 3:
+        return 0
+    return stable_score + 1
+
+
+def snap_for_character():
+    img = snap()
+    if img is None:
+        return None
+    return preprocess_character_image(img)
+
+
+def setup_sensor():
+    sensor.reset(dual_buff=USE_DOUBLE_BUF)
+    sensor.set_framesize(sensor.QQVGA)
+    sensor.set_pixformat(sensor.RGB565)
+    sensor.set_auto_gain(False, 50)
+    sensor.set_windowing((0,0,112,112))
+    sensor.set_auto_exposure(False, 8000)
+    sensor.set_auto_whitebal(False,(82,64,110))
+    sensor.run(1)
+    sensor.skip_frames(time=1500)
 
 
 def main(model_addr=0x300000):
-    sensor.reset(dual_buff=False)
-    sensor.set_pixformat(sensor.RGB565)
-    sensor.set_framesize(sensor.QQVGA)
-    sensor.set_auto_whitebal(False, (76.0, 64.0, 101.0))
-    sensor.set_auto_gain(False, gain_db=20)
-    sensor.set_auto_exposure(False, exposure_us=8000)
-    sensor.set_windowing((0, 0, 112, 112))
-    sensor.skip_frames(time=2000)
+    setup_sensor()
 
     task = kpu.load(model_addr)
     clock = time.clock()
-
-    img = snap()
-    if img is None:
-        return
-
-    kpu.forward_async(task, img)
 
     frame_i = 0
     try:
@@ -151,15 +218,17 @@ def main(model_addr=0x300000):
             clock.tick()
             frame_i += 1
 
+            img = snap()
+            if img is None:
+                send(0)
+                continue
+
             col = 0
             if COLOR_EVERY > 0 and (frame_i % COLOR_EVERY) == 0:
                 col = detect_colored_victim(img)
 
-            kpu.wait_done()
-            next_img = snap()
-
-
-            fmap = kpu.get_output(task, 0)
+            preprocess_character_image(img)
+            fmap = kpu.forward(task, img)
             ch = detect_character_victim_from_fmap(fmap)
 
             if ch:
@@ -169,13 +238,8 @@ def main(model_addr=0x300000):
             else:
                 send(0)
 
-            if next_img is not None:
-                img = next_img
-
-            kpu.forward_async(task, img)
-
             if DEBUG_EVERY > 0 and (frame_i % DEBUG_EVERY) == 0:
-                print(clock.fps(),ch,col)
+                print(clock.fps(), ch, col)
 
             if GC_EVERY > 0 and (frame_i % GC_EVERY) == 0:
                 gc.collect()
