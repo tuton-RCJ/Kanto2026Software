@@ -7,12 +7,12 @@ from fpioa_manager import fm
 
 USE_DOUBLE_BUF = False
 
-DEBUG_EVERY = 1      
-GC_EVERY = 30       
-COLOR_EVERY = 1   
+DEBUG_EVERY = 1
+GC_EVERY = 30
+COLOR_EVERY = 1
 
-MIN_CONF = 0.7
-CHAR_CONSISTENT = 3  
+MIN_CONF = 0.9
+CHAR_CONSISTENT = 3
 CHAR_BINARY_THRESHOLD = 60
 
 COLOR_PIXELS_THR = 120
@@ -34,7 +34,7 @@ COLOR_TARGETS = (
 
 DETECT_LAB_THRESHOLDS = [
     (0, 20, -30, 30, -50, 50),      # Black
-    (20, 80, 30, 80, 30, 70),       # Red
+    (20, 80, 30, 80, 10, 70),       # Red
     (30, 100, -40, 40, 40, 90),     # Yellow
     (10, 60, -60, -20, 0, 50),      # Green
     (30, 70, 10, 40, -100, -50),    # Blue
@@ -44,6 +44,7 @@ labels = ("Omega", "Psi", "Phi", "Other")
 CHAR_CODES = {"Omega": 1, "Psi": 2, "Phi": 3}
 
 color_history = []
+last_color_debug = "No color"
 
 fm.register(35, fm.fpioa.UART1_TX, force=True)
 fm.register(34, fm.fpioa.UART1_RX, force=True)
@@ -110,6 +111,11 @@ def push_color_history(layers, conf):
         color_history.pop(0)
 
 
+def clear_color_history():
+    while color_history:
+        color_history.pop()
+
+
 def get_stable_color_layers():
     if len(color_history) <= 0:
         return None, 0.0
@@ -145,6 +151,8 @@ def get_stable_color_layers():
 
 
 def detect_colored_victim(img):
+    global last_color_debug
+
     blobs = img.find_blobs(
         DETECT_LAB_THRESHOLDS,
         pixels_threshold=COLOR_PIXELS_THR,
@@ -154,21 +162,40 @@ def detect_colored_victim(img):
     )
 
     if not blobs:
+        clear_color_history()
+        last_color_debug = "No blob"
         return 0
 
     target = max(blobs, key=lambda b: b.pixels())
     x, y, w, h = target.rect()
     if w < 20 or h < 20:
+        last_color_debug = "Small blob:%s" % (target.rect(),)
         return 0
 
+    cx = target.cx()
+    cy = target.cy()
+    rx = float(w) * 0.5
+    ry = float(h) * 0.5
+    left_margin = cx - rx
+    right_margin = img.width() - 1 - (cx + rx)
+    top_margin = cy - ry
+    bottom_margin = img.height() - 1 - (cy + ry)
+
     result = img.estimate_concentric_score(
-        target.cx(),
-        target.cy(),
-        float(w) * 0.5,
-        float(h) * 0.5,
+        cx,
+        cy,
+        rx,
+        ry,
         targets=COLOR_TARGETS,
     )
     if not result:
+        last_color_debug = "No score rect:%s margin:%d,%d,%d,%d" % (
+            target.rect(),
+            int(left_margin),
+            int(right_margin),
+            int(top_margin),
+            int(bottom_margin),
+        )
         return 0
 
     score, layers, final_conf, center_layers, center_conf, width_layers, width_conf = result
@@ -181,6 +208,15 @@ def detect_colored_victim(img):
     stable_score = 0
     for c in stable_layers:
         stable_score += (-2, -1, 0, 1, 2)[c]
+
+    last_color_debug = "raw:%d layers:%s conf:%d rect:%s center:%d,%d" % (
+        stable_score,
+        layers,
+        int(stable_conf * 100),
+        target.rect(),
+        cx,
+        cy,
+    )
 
     if stable_score < 0 or stable_score >= 3:
         return 0
@@ -196,8 +232,9 @@ def snap_for_character():
 
 def setup_sensor():
     sensor.reset(dual_buff=USE_DOUBLE_BUF)
-    sensor.set_framesize(sensor.QQVGA)
+    sensor.set_jb_quality(95)
     sensor.set_pixformat(sensor.RGB565)
+    sensor.set_framesize(sensor.QQVGA)
     sensor.set_auto_gain(False, 50)
     sensor.set_windowing((46,0,112,112))
     sensor.set_auto_exposure(False, 8000)
@@ -239,7 +276,7 @@ def main(model_addr=0x300000):
                 send(0)
 
             if DEBUG_EVERY > 0 and (frame_i % DEBUG_EVERY) == 0:
-                print(clock.fps(), ch, col)
+                print(clock.fps(), ch, col, last_color_debug)
 
             if GC_EVERY > 0 and (frame_i % GC_EVERY) == 0:
                 gc.collect()
