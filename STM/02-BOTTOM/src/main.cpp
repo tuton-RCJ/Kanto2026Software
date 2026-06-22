@@ -40,8 +40,6 @@ void setup()
 
   pinMode(PhotoRefPin1, INPUT);
   pinMode(PhotoRefPin2, INPUT);
-  pinMode(PA2, OUTPUT);
-  return;
 
   AFIO->MAPR |= AFIO_MAPR_PD01_REMAP;
   strip.begin();
@@ -68,19 +66,7 @@ void setup()
 
 void loop()
 {
-  // uart1.print(analogRead(PhotoRefPin1));
-  // uart1.print(",");
-  // uart1.println(analogRead(PhotoRefPin2));
-  // return;
-  if (analogRead(PhotoRefPin2) < 917)
-  {
-    digitalWrite(PA2, HIGH);
-  }
-  else
-  {
-    digitalWrite(PA2, LOW);
-  }
-  return;
+
   if (millis() - measuringStartTime >= waitTime)
   {
     colorsensor.end();
@@ -139,6 +125,10 @@ void checkRPi()
           uart2.write(sensorData[i]);
           checkDigit ^= sensorData[i];
         }
+        uart2.write(analogRead(PhotoRefPin1) >> 2);  
+        checkDigit ^= (analogRead(PhotoRefPin1) >> 2);
+        uart2.write(analogRead(PhotoRefPin2) >> 2); 
+        checkDigit ^= (analogRead(PhotoRefPin2) >> 2);
         uart2.write(checkDigit);
       }
       else

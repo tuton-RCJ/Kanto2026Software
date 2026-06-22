@@ -10,6 +10,7 @@ public:
     UnitV(HardwareSerial *serial, unsigned long baudrate = 115200);
 
     void read();
+    void write(byte data);
     int status;
 
 private:

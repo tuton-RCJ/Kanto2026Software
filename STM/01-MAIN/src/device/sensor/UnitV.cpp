@@ -14,3 +14,8 @@ void UnitV::read()
         status = _serial->read();
     }
 }
+
+void UnitV::write(byte data)
+{
+    _serial->write(data);
+}

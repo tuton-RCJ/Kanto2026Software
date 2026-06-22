@@ -110,7 +110,7 @@ void setup()
     servo_L.attach(Servo_L);
     servo_R.attach(Servo_R);
     servo_L.write(150);
-    servo_R.write(60);
+    servo_R.write(20);
 
     init_i2c();
     // delay(50);
@@ -216,10 +216,11 @@ void loop()
     // buzzer.Shougatu();
     // return;
     // uart1.println("Main Loop Start");
-    // servo_R.write(180);
+    // servo_R.write(20);
     // delay(500);
-    // servo_R.write(60);　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　ｖｃｖｃｃ
-    // delay(500);
+    // servo_R.write(120);
+    // delay(1500);
+
     // return;
     checkRPi();
     // return;
@@ -546,6 +547,35 @@ void checkRPi()
                 uart1.println("CheckDigit Error!");
             }
         }
+        else if (type == 6)
+        {
+            // UnitV Mode Change Command
+            unsigned long startTime = millis();
+            while (uart2.available() < 2)
+            {
+                if (millis() - startTime > 100)
+                {
+                    uart1.println("Timeout waiting for UnitV mode");
+                    while (uart2.available())
+                    {
+                        uart2.read();
+                    }
+                    return;
+                }
+            }
+            byte mode = uart2.read();
+            byte CD = 0x06 ^ seq ^ mode;
+            if (CD == uart2.read())
+            {
+                uart1.println("UnitV Mode Change Command Received");
+                unitv_L.write(mode);
+                unitv_R.write(mode);
+                // 返答
+                uart2.write(0x06);       // type
+                uart2.write(seq);        // seq
+                uart2.write(0x06 ^ seq); // CD
+            }
+        }
         else
         {
             uart1.println("Unknown Command Type!");
@@ -639,11 +669,11 @@ void MoveServo()
             {
                 if (cmd.isOpen)
                 {
-                    servo_R.write(180);
+                    servo_R.write(120);
                 }
                 else
                 {
-                    servo_R.write(60);
+                    servo_R.write(20);
                 }
             }
             servoCommandQueue.pop();
@@ -652,24 +682,6 @@ void MoveServo()
         {
             break;
         }
-    }
-}
-
-void DropRescueKit(bool isLeft)
-{
-    if (isLeft)
-    {
-        servo_L.write(66);
-        delay(200);
-        servo_L.write(0);
-        delay(200);
-    }
-    else
-    {
-        servo_R.write(90);
-        delay(200);
-        servo_R.write(180);
-        delay(200);
     }
 }
 
