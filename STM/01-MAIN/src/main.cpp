@@ -109,7 +109,7 @@ void setup()
     uart6.begin(115200);
     servo_L.attach(Servo_L);
     servo_R.attach(Servo_R);
-    servo_L.write(150);
+    servo_L.write(110);
     servo_R.write(20);
 
     init_i2c();
@@ -216,12 +216,12 @@ void loop()
     // buzzer.Shougatu();
     // return;
     // uart1.println("Main Loop Start");
-    // servo_R.write(20);
+    // servo_L.write(10);
     // delay(500);
-    // servo_R.write(120);
+    // servo_L.write(110);
     // delay(1500);
-
     // return;
+
     checkRPi();
     // return;
     MoveServo();
@@ -658,11 +658,11 @@ void MoveServo()
             {
                 if (cmd.isOpen)
                 {
-                    servo_L.write(30);
+                    servo_L.write(10);
                 }
                 else
                 {
-                    servo_L.write(150);
+                    servo_L.write(110);
                 }
             }
             else

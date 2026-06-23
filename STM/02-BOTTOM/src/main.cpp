@@ -125,10 +125,12 @@ void checkRPi()
           uart2.write(sensorData[i]);
           checkDigit ^= sensorData[i];
         }
-        uart2.write(analogRead(PhotoRefPin1) >> 2);  
-        checkDigit ^= (analogRead(PhotoRefPin1) >> 2);
-        uart2.write(analogRead(PhotoRefPin2) >> 2); 
-        checkDigit ^= (analogRead(PhotoRefPin2) >> 2);
+        byte _rf1 = analogRead(PhotoRefPin1) >> 2;
+        byte _rf2 = analogRead(PhotoRefPin2) >> 2;
+        uart2.write(_rf1);
+        checkDigit ^= _rf1;
+        uart2.write(_rf2);
+        checkDigit ^= _rf2;
         uart2.write(checkDigit);
       }
       else
