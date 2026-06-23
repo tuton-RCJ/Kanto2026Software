@@ -5,46 +5,51 @@ from machine import UART
 import ustruct
 from fpioa_manager import fm
 
-USE_DOUBLE_BUF = False
+USE_DOUBLE_BUF = True
 
 DEBUG_EVERY = 1
 GC_EVERY = 30
 COLOR_EVERY = 1
 
-MIN_CONF = 0.9
-CHAR_CONSISTENT = 3
-CHAR_BINARY_THRESHOLD = 60
+MIN_CONF = 0.80
+CHAR_CONSISTENT = 2
+CHAR_BINARY_THRESHOLD = 50
 
 COLOR_PIXELS_THR = 120
 COLOR_AREA_THR = 120
 COLOR_HISTORY_N = 2
 
+CENTER_ZOOM_SCALE = 1.2
 
 last_character_label = None
 character_count = 0
 
 COLOR_NAMES = ("Black", "Red", "Yellow", "Green", "Blue")
 COLOR_TARGETS = (
-    (40, 40, 40),
-    (200, 50, 50),
-    (200, 200, 50),
-    (10, 90, 60),
-    (50, 80, 200),
+    (20, 20, 20),
+    (240, 50, 30),
+    (220, 180, 40),
+    (40, 120, 20),
+    (50, 130, 205),
 )
 
 DETECT_LAB_THRESHOLDS = [
-    (0, 20, -30, 30, -50, 50),      # Black
-    (20, 80, 30, 80, 10, 70),       # Red
-    (30, 100, -40, 40, 40, 90),     # Yellow
-    (10, 60, -60, -20, 0, 50),      # Green
-    (30, 70, 10, 40, -100, -50),    # Blue
+(0, 30, -15, 12, -40, 15), # Black lab_mean=(4,-2,3) lab_sigma=(3,4,4)
+(30, 75, 30, 90, 40, 90), # Red lab_mean=(48,78,61) lab_sigma=(5,9,6)
+(30, 85, -20, 50, 55, 100), # Yellow
+(30, 75, -60, -20, 10, 70), # Green lab_mean=(56,-44,13) lab_sigma=(5,14,17)
+(35, 75, -40, 40, -65, -30), # Blue lab_mean=(61,7,-43) lab_sigma=(5,15,20)
 ]
+
+DETECT_YELLOW_INDEX = 2
+DETECT_SEED_CODE_MASK = 0xFFFF ^ (1 << DETECT_YELLOW_INDEX)
 
 labels = ("Omega", "Psi", "Phi", "Other")
 CHAR_CODES = {"Omega": 1, "Psi": 2, "Phi": 3}
 
 color_history = []
 last_color_debug = "No color"
+center_zoom_enabled = False
 
 fm.register(35, fm.fpioa.UART1_TX, force=True)
 fm.register(34, fm.fpioa.UART1_RX, force=True)
@@ -58,6 +63,38 @@ def send(data):
     uart.write(ustruct.pack("B", data & 0xFF))
 
 
+def update_center_zoom_state():
+    global center_zoom_enabled
+
+    while uart.any():
+        cmd = uart.readchar()
+        if cmd == 1:
+            center_zoom_enabled = True
+        elif cmd == 0:
+            center_zoom_enabled = False
+
+    return center_zoom_enabled
+
+
+def center_zoom_image(img):
+    w = img.width()
+    h = img.height()
+
+    crop_h = int((h / CENTER_ZOOM_SCALE) + 0.5)
+
+    if crop_h < 1:
+        crop_h = 1
+
+    y = (h - crop_h) // 2
+
+    croped = img.crop(
+        roi=(0, y, w, crop_h),
+        x_scale=1,
+        y_scale=(float(h) + 0.01) / crop_h,
+    )
+    return croped
+
+
 def snap():
     try:
         return sensor.snapshot()
@@ -68,6 +105,7 @@ def snap():
 def preprocess_character_image(img):
     img.to_grayscale()
     img.binary([(CHAR_BINARY_THRESHOLD, 255)])
+    #img.remove_edge_connected_black()
     return img
 
 def detect_character_victim_from_fmap(fmap):
@@ -153,24 +191,35 @@ def get_stable_color_layers():
 def detect_colored_victim(img):
     global last_color_debug
 
-    blobs = img.find_blobs(
+    blobs = img.find_blobs_any(
         DETECT_LAB_THRESHOLDS,
         pixels_threshold=COLOR_PIXELS_THR,
         area_threshold=COLOR_AREA_THR,
         merge=True,
         margin=5,
+        seed_code_mask=DETECT_SEED_CODE_MASK,
     )
 
     if not blobs:
         clear_color_history()
         last_color_debug = "No blob"
-        return 0
+        return
+    blobs_res = []
+    for b in blobs:
+        x, y, w, h = b.rect()
+        if 0.9 > b.pixels()/(w * h) > 0.45 and w <= 70 and h <= 70 and min(h/w, w/h) > 0.65 and y > 5 and y < 107:
+            blobs_res.append(b)
 
-    target = max(blobs, key=lambda b: b.pixels())
+    if not blobs_res:
+        clear_color_history()
+        last_color_debug = "No target-shaped blob"
+        return
+    target = max(blobs_res, key=lambda b: b.pixels())
     x, y, w, h = target.rect()
     if w < 20 or h < 20:
+        clear_color_history()
         last_color_debug = "Small blob:%s" % (target.rect(),)
-        return 0
+        return
 
     cx = target.cx()
     cy = target.cy()
@@ -189,6 +238,7 @@ def detect_colored_victim(img):
         targets=COLOR_TARGETS,
     )
     if not result:
+        clear_color_history()
         last_color_debug = "No score rect:%s margin:%d,%d,%d,%d" % (
             target.rect(),
             int(left_margin),
@@ -196,14 +246,16 @@ def detect_colored_victim(img):
             int(top_margin),
             int(bottom_margin),
         )
-        return 0
+        return
 
     score, layers, final_conf, center_layers, center_conf, width_layers, width_conf = result
     push_color_history(layers, final_conf)
 
     stable_layers, stable_conf = get_stable_color_layers()
-    if not stable_layers:
-        return 0
+    if (not stable_layers) or all([i == 2 for i in stable_layers]) :
+        clear_color_history()
+        last_color_debug = "No stable color"
+        return
 
     stable_score = 0
     for c in stable_layers:
@@ -217,10 +269,10 @@ def detect_colored_victim(img):
         cx,
         cy,
     )
-
     if stable_score < 0 or stable_score >= 3:
-        return 0
-    return stable_score + 1
+        clear_color_history()
+        return
+    return (stable_score + 4)
 
 
 def snap_for_character():
@@ -232,13 +284,13 @@ def snap_for_character():
 
 def setup_sensor():
     sensor.reset(dual_buff=USE_DOUBLE_BUF)
-    sensor.set_jb_quality(95)
+    sensor.set_jb_quality(1)
     sensor.set_pixformat(sensor.RGB565)
     sensor.set_framesize(sensor.QQVGA)
     sensor.set_auto_gain(False, 50)
-    sensor.set_windowing((0,0,112,112))
-    sensor.set_auto_exposure(False, 8000)
-    sensor.set_auto_whitebal(False,(82,64,110))
+    sensor.set_windowing((20,0,112,112))
+    sensor.set_auto_exposure(False, 3000)
+    sensor.set_auto_whitebal(False,(74, 64, 89))
     sensor.run(1)
     sensor.skip_frames(time=1500)
 
@@ -255,15 +307,17 @@ def main(model_addr=0x300000):
             clock.tick()
             frame_i += 1
 
+            zoom_active = update_center_zoom_state()
             img = snap()
             if img is None:
                 send(0)
                 continue
 
-            col = 0
-            if COLOR_EVERY > 0 and (frame_i % COLOR_EVERY) == 0:
-                col = detect_colored_victim(img)
+            if zoom_active:
+                img = center_zoom_image(img)
 
+            col = detect_colored_victim(img)
+            print(col)
             preprocess_character_image(img)
             fmap = kpu.forward(task, img)
             ch = detect_character_victim_from_fmap(fmap)
